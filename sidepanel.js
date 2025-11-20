@@ -145,13 +145,38 @@ async function showItemDetail(item) {
     // Build AI extracted data section
     let aiExtractedSection = '';
     if (item.ai_extracted && item.type === 'structured') {
+        const listFields = ['key_points', 'key_findings', 'action_items', 'decisions', 'topics', 'attendees', 'desired_solution', 'key_concepts', 'definitions'];
+
         aiExtractedSection = `
       <div class="detail-section">
         <h4>AI Extracted Fields</h4>
         <div class="detail-content" style="background: #faf5ff;">
-          ${Object.entries(item.data).filter(([key]) => key !== 'raw_text' && key !== 'content').map(([key, value]) =>
-            `<div style="margin-bottom: 8px;"><strong style="color: #7c3aed;">${key}:</strong> ${value}</div>`
-        ).join('')}
+          ${Object.entries(item.data).filter(([key]) => key !== 'raw_text' && key !== 'content').map(([key, value]) => {
+            let displayValue = value;
+
+            // Format arrays and list fields as bullet points
+            if (Array.isArray(value)) {
+                displayValue = '<ul style="margin: 4px 0; padding-left: 20px;">' +
+                    value.map(v => `<li>${v}</li>`).join('') + '</ul>';
+            } else if (listFields.includes(key) && typeof value === 'string' && value.includes('•')) {
+                // If it contains bullets, convert to HTML list
+                const points = value.split('•').filter(p => p.trim().length > 0);
+                displayValue = '<ul style="margin: 4px 0; padding-left: 20px;">' +
+                    points.map(p => `<li>${p.trim()}</li>`).join('') + '</ul>';
+            } else if (listFields.includes(key) && typeof value === 'string' && value.length > 100) {
+                // Long string in a list field - try to split and bulletize
+                const points = value.split(/\.\s+(?=[A-Z])|;\s*|\n/).filter(p => p.trim().length > 10);
+                if (points.length > 1) {
+                    displayValue = '<ul style="margin: 4px 0; padding-left: 20px;">' +
+                        points.map(p => `<li>${p.trim()}</li>`).join('') + '</ul>';
+                }
+            }
+
+            return `<div style="margin-bottom: 12px;">
+                <strong style="color: #7c3aed;">${key.replace(/_/g, ' ')}:</strong> 
+                ${displayValue}
+            </div>`;
+        }).join('')}
         </div>
       </div>
     `;
@@ -620,9 +645,31 @@ function setupEventListeners() {
             Object.entries(extractedData).forEach(([key, value]) => {
                 const row = document.createElement('div');
                 row.className = 'extraction-field-row';
+
+                // Check if this field should be displayed as a list
+                const listFields = ['key_points', 'key_findings', 'action_items', 'decisions', 'topics', 'attendees', 'desired_solution', 'key_concepts', 'definitions'];
+                const isListField = listFields.includes(key);
+
+                // If value is an array, format as bullet points
+                let displayValue = value;
+                if (Array.isArray(value)) {
+                    displayValue = value.join('\n• ');
+                    if (displayValue) displayValue = '• ' + displayValue;
+                } else if (isListField && typeof value === 'string' && value.length > 100) {
+                    // If it's a list field but came as a long string, try to split it intelligently
+                    // Split on periods followed by spaces, or semicolons, or newlines
+                    const points = value.split(/\.\s+(?=[A-Z])|;\s*|\n/).filter(p => p.trim().length > 0);
+                    if (points.length > 1) {
+                        displayValue = '• ' + points.map(p => p.trim().replace(/^[•\-\*]\s*/, '')).join('\n• ');
+                    }
+                }
+
                 row.innerHTML = `
-                    <label>${key}</label>
-                    <input type="text" value="${value}" data-field-name="${key}">
+                    <label>${key.replace(/_/g, ' ')}</label>
+                    ${isListField || displayValue.includes('\n') ?
+                        `<textarea rows="4" data-field-name="${key}" style="flex: 1; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical;">${displayValue}</textarea>` :
+                        `<input type="text" value="${displayValue}" data-field-name="${key}">`
+                    }
                 `;
                 extractionFieldsContainer.appendChild(row);
             });
