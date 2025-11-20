@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Web Collector</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Smart Collector</h1>
+      <span id="total-count" class="badge">0 items</span>
+    </header>
+    
+    <section class="recent-saves">
+      <h2>Recent Saves</h2>
+      <ul id="recent-list">
+        <!-- Items will be injected here -->
+        <li class="empty-state">No items saved yet.</li>
+      </ul>
+    </section>
+
+    <footer>
+      <button id="view-all-btn" class="primary-btn">View All Collections</button>
+      <button id="export-btn" class="secondary-btn">Export to Sheets</button>
+    </footer>
+  </div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

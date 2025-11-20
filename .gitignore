@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.DS_Store
+
+# Build outputs
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+Thumbs.db
+
+# Extension package
+*.zip
+*.crx
+*.pem
+
+# Temporary files
+*.tmp
+.cache/
+
+# User data (don't commit user's collected data or API keys)
+# Note: structure is committed, not user data storage

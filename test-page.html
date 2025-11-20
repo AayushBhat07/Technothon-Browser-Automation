@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page for Smart Web Collector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .test-section {
+            border: 2px solid #2563eb;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            background: #eff6ff;
+        }
+
+        h1 {
+            color: #2563eb;
+        }
+
+        h2 {
+            color: #1e293b;
+            margin-top: 0;
+        }
+
+        .instructions {
+            background: #fef3c7;
+            padding: 15px;
+            border-left: 4px solid #f59e0b;
+            margin: 20px 0;
+        }
+
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🧪 Smart Web Collector - Test Page</h1>
+
+    <div class="instructions">
+        <h3>📋 How to Test</h3>
+        <ol>
+            <li>Select the text in any "Test Section" below</li>
+            <li>Right-click and choose <strong>"Save to Smart Collector"</strong></li>
+            <li>Open the extension side panel</li>
+            <li>Look for the <strong>"🤖 Extract Structure with AI"</strong> button on the item card</li>
+        </ol>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 1: Contact Information (>50 words)</h2>
+        <p>
+            Contact Sarah Johnson at DataCorp, she's the VP of Sales. Email her at sarah.j@datacorp.com or call
+            415-555-0123. They're based in San Francisco. She mentioned they're looking to expand their data collection
+            capabilities and might be interested in partnering with us. Sarah has been with DataCorp for 5 years and
+            really knows the industry well. She's particularly interested in our API integration features.
+        </p>
+        <p><strong>✅ This should show the AI extraction button (>50 words, unstructured)</strong></p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Business Lead (>50 words)</h2>
+        <p>
+            john smith - techstart inc, ceo, jsmith@techstart.io, manhattan, raised $2M seed round. Looking for
+            partnerships in the data analytics space. Company founded in 2023 and already has 15 employees. They're
+            expanding rapidly and need better data collection tools. John mentioned he found us through a mutual contact
+            and is very interested in scheduling a demo next week.
+        </p>
+        <p><strong>✅ This should show the AI extraction button (>50 words, unstructured)</strong></p>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Short Text (<50 words)</h2>
+                <p>
+                    Quick reminder: Meeting tomorrow at 3 PM with the tech team to discuss the new features.
+                </p>
+                <p><strong>❌ This should NOT show the AI extraction button (<50 words)</strong>
+                </p>
+    </div>
+
+    <div class="instructions" style="background: #dcfce7; border-left-color: #059669;">
+        <h3>🔍 Debugging Checklist</h3>
+        <ul>
+            <li><strong>Extension loaded?</strong> Check <code>chrome://extensions/</code></li>
+            <li><strong>Extension reloaded?</strong> Click the refresh button after code changes</li>
+            <li><strong>Side panel opens?</strong> Click the extension icon or click "View All" in popup</li>
+            <li><strong>Items saved?</strong> Check if items appear in the collection</li>
+            <li><strong>Console errors?</strong> Right-click side panel > Inspect > Console tab</li>
+        </ul>
+    </div>
+
+    <div class="test-section" style="border-color: #7c3aed; background: #faf5ff;">
+        <h2>🤖 AI Extraction Test Data</h2>
+        <p>
+            Meet Jennifer Martinez, the Chief Technology Officer at CloudSync Solutions. You can reach her at
+            jennifer.martinez@cloudsync.io or call her office at 628-555-0198. CloudSync is headquartered in Austin,
+            Texas and they've been pioneering cloud-based data synchronization since 2018. Jennifer is particularly
+            interested in our real-time data collection features and has allocated a budget of $50K for the pilot
+            program. She's available for a call next Tuesday or Thursday afternoon.
+        </p>
+        <p><strong>Expected AI Extraction:</strong></p>
+        <ul>
+            <li>name: Jennifer Martinez</li>
+            <li>title: Chief Technology Officer / CTO</li>
+            <li>company: CloudSync Solutions</li>
+            <li>email: jennifer.martinez@cloudsync.io</li>
+            <li>phone: 628-555-0198</li>
+            <li>location: Austin, Texas</li>
+            <li>founded: 2018</li>
+            <li>budget: $50K</li>
+        </ul>
+    </div>
+
+</body>
+
+</html>
