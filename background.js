@@ -64,11 +64,19 @@ async function handleSaveSelection(data, tabId) {
     // Auto-detect data type and suggest collection
     const detection = DataDetector.detectDataType(data.selection.text);
 
+    // Get existing collections
+    const allCollections = await storage.getCollections();
+    const existingCollections = allCollections.map(c => ({
+        name: c.name,
+        itemCount: c.items.length
+    }));
+
     // Ask content script to show collection picker
     const pickerResponse = await chrome.tabs.sendMessage(tabId, {
         action: 'showCollectionPicker',
         suggestedCollection: detection.suggestedCollection,
-        detectedType: detection.type
+        detectedType: detection.type,
+        existingCollections: existingCollections
     });
 
     const collectionName = pickerResponse.collectionName;

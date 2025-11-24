@@ -6,14 +6,144 @@ import { MappingManager } from './modules/mapping.js';
 import { TemplateManager } from './modules/templates.js';
 import { aiManager } from './modules/ai.js';
 
-
 let currentCollectionId = null;
 let currentExtractionItem = null;
 
+// Helper to wait for AuthManager to be available
+async function waitForAuthManager(maxAttempts = 10) {
+    for (let i = 0; i < maxAttempts; i++) {
+        if (window.AuthManager) {
+            console.log('AuthManager found:', window.AuthManager);
+            console.log('AuthManager type:', typeof window.AuthManager);
+            console.log('AuthManager.init type:', typeof window.AuthManager.init);
+            if (typeof window.AuthManager.init === 'function') {
+                return true;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    return false;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize Storage
+    await storage.open();
+
+    // Initialize Auth (Global from auth.js) - wait for it to be available
+    const authAvailable = await waitForAuthManager();
+    if (authAvailable) {
+        try {
+            await window.AuthManager.init();
+            // Subscribe to Auth Changes
+            window.AuthManager.subscribe(updateUserProfileUI);
+        } catch (error) {
+            console.error('AuthManager initialization failed:', error);
+        }
+    } else {
+        console.warn('AuthManager not available after waiting');
+    }
+
+    // Load initial data
     await loadCollections();
+    await updateDashboardStats();
     setupEventListeners();
 });
+
+// Auth UI Handling
+function updateUserProfileUI(user) {
+    const loggedInView = document.getElementById('user-logged-in');
+    const loggedOutView = document.getElementById('user-logged-out');
+    const userAvatar = document.getElementById('user-avatar');
+    const userName = document.getElementById('user-name');
+
+    if (user) {
+        // User is signed in
+        loggedInView.style.display = 'flex';
+        loggedOutView.style.display = 'none';
+        userAvatar.src = user.picture;
+        userName.textContent = user.name;
+    } else {
+        // User is signed out
+        loggedInView.style.display = 'none';
+        loggedOutView.style.display = 'flex';
+    }
+}
+
+// Update dashboard statistics
+async function updateDashboardStats() {
+    const collections = await storage.getCollections();
+
+    // Total items across all collections
+    const totalItems = collections.reduce((sum, c) => sum + c.items.length, 0);
+    document.getElementById('total-items').textContent = totalItems;
+
+    // Count AI extracted items
+    let aiExtractedCount = 0;
+    collections.forEach(c => {
+        c.items.forEach(item => {
+            if (item.ai_extracted) {
+                aiExtractedCount++;
+            }
+        });
+    });
+    document.getElementById('ai-extracted-count').textContent = aiExtractedCount;
+
+    // Find last saved item (most recent by timestamp)
+    let lastItem = null;
+    let lastTimestamp = 0;
+    collections.forEach(c => {
+        c.items.forEach(item => {
+            const timestamp = new Date(item.timestamp || item.source?.timestamp || 0).getTime();
+            if (timestamp > lastTimestamp) {
+                lastTimestamp = timestamp;
+                lastItem = item;
+            }
+        });
+    });
+
+    // Update last saved from card
+    const lastSavedSiteEl = document.getElementById('last-saved-site');
+    const lastSavedSiteText = document.getElementById('last-saved-site-text');
+    const lastSavedSiteIcon = document.getElementById('last-saved-site-icon');
+
+    if (lastItem && lastItem.source) {
+        try {
+            const urlStr = lastItem.source.url;
+
+            // Handle file:// URLs (local HTML files)
+            if (urlStr.startsWith('file://')) {
+                const filePath = urlStr.replace('file://', '');
+                const fileName = filePath.split('/').pop() || filePath;
+                lastSavedSiteText.textContent = fileName;
+                lastSavedSiteEl.title = `Click to open: ${filePath}`;
+                lastSavedSiteIcon.style.display = 'block';
+                lastSavedSiteEl.onclick = () => {
+                    chrome.tabs.create({ url: urlStr });
+                };
+            } else {
+                // Handle regular http(s):// URLs
+                const url = new URL(urlStr);
+                const siteName = url.hostname.replace('www.', '');
+                lastSavedSiteText.textContent = siteName;
+                lastSavedSiteEl.title = `Click to visit: ${urlStr}`;
+                lastSavedSiteIcon.style.display = 'block';
+                lastSavedSiteEl.onclick = () => {
+                    chrome.tabs.create({ url: urlStr });
+                };
+            }
+        } catch (e) {
+            lastSavedSiteText.textContent = lastItem.source.title || 'Unknown';
+            lastSavedSiteEl.title = '';
+            lastSavedSiteIcon.style.display = 'none';
+            lastSavedSiteEl.onclick = null;
+        }
+    } else {
+        lastSavedSiteText.textContent = '-';
+        lastSavedSiteEl.title = '';
+        lastSavedSiteIcon.style.display = 'none';
+        lastSavedSiteEl.onclick = null;
+    }
+}
 
 async function loadCollections() {
     const collections = await storage.getCollections();
@@ -25,11 +155,33 @@ async function loadCollections() {
         li.className = `collection-item ${c.id === currentCollectionId ? 'active' : ''}`;
         li.innerHTML = `
       <span class="collection-name">${c.name}</span>
-      <span class="collection-count">${c.items.length}</span>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <span class="collection-count">${c.items.length}</span>
+        <button class="collection-export-btn" data-collection-id="${c.id}" title="Export CSV" onclick="event.stopPropagation();">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+      </div>
     `;
         li.onclick = () => selectCollection(c.id);
         list.appendChild(li);
     });
+
+    // Setup export button listeners
+    document.querySelectorAll('.collection-export-btn').forEach(btn => {
+        btn.onclick = async (e) => {
+            e.stopPropagation();
+            const collectionId = btn.dataset.collectionId;
+            const collection = await storage.getCollection(collectionId);
+            await exportCollectionToCSV(collection);
+        };
+    });
+
+    // Update dashboard stats
+    await updateDashboardStats();
 
     // Select first collection by default if none selected
     if (!currentCollectionId && collections.length > 0) {
@@ -48,99 +200,144 @@ async function selectCollection(id) {
     const collection = await storage.getCollection(id);
     renderItems(collection.items);
 
-    // Enable enrich/template buttons if items exist
-    const enrichBtn = document.getElementById('enrich-btn');
+    // Enable template button if items exist
     const templateBtn = document.getElementById('template-btn');
     const hasItems = collection.items.length > 0;
-    enrichBtn.disabled = !hasItems;
     templateBtn.disabled = !hasItems;
+
+    // Update dashboard stats
+    await updateDashboardStats();
 }
 
 function renderItems(items) {
     const container = document.getElementById('items-container');
-    container.innerHTML = '';
+
+    // Keep the table header, clear only rows
+    const existingRows = container.querySelectorAll('.table-row, .empty-state');
+    existingRows.forEach(row => row.remove());
 
     if (items.length === 0) {
-        container.innerHTML = '<div class="empty-state"><p>No items in this collection</p></div>';
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        emptyState.innerHTML = '<p>No items in this collection</p>';
+        container.appendChild(emptyState);
         return;
     }
 
     items.forEach((item, index) => {
+        const row = document.createElement('div');
+        row.className = 'table-row';
+        row.dataset.index = index;
+
         const validation = ValidationManager.validateItem(item);
-        const card = document.createElement('div');
-        card.className = `item-card ${validation.status}`;
-        card.dataset.index = index; // Store the index for later reference
+        const displayTitle = item.data.title || item.data.name || item.data.content || item.data.raw_text || 'Untitled Item';
 
-        // Check if item qualifies for AI extraction
-        const qualifiesForExtraction = shouldShowExtractionButton(item);
+        // Truncate title if too long
+        const truncatedTitle = displayTitle.length > 40 ? displayTitle.substring(0, 40) + '...' : displayTitle;
 
-        // Build enriched data display
-        let enrichedHtml = '';
-        if (item.enriched && Object.keys(item.enriched).length > 0) {
-            enrichedHtml = '<div class="enriched-data">';
-            Object.entries(item.enriched).forEach(([key, value]) => {
-                enrichedHtml += `<div class="enriched-field"><strong>${key}:</strong> ${value}</div>`;
-            });
-            enrichedHtml += '</div>';
+        // Extract domain from URL
+        let sourceDomain = 'Unknown';
+        try {
+            const url = new URL(item.source.url);
+            sourceDomain = url.hostname.replace('www.', '');
+        } catch (e) {
+            sourceDomain = item.source.title || 'Unknown';
         }
 
-        // Display structured data if item type is 'structured' or ai_extracted
-        let structuredHtml = '';
-        if (item.type === 'structured' || item.ai_extracted) {
-            structuredHtml = '<div class="enriched-data" style="background-color: #faf5ff; border-color: #c084fc;">';
-            Object.entries(item.data).forEach(([key, value]) => {
-                if (key !== 'raw_text' && key !== 'content') {
-                    structuredHtml += `<div class="enriched-field" style="color: #6b21a8;"><strong>${key}:</strong> ${value}</div>`;
-                }
-            });
-            structuredHtml += '</div>';
+        // Determine Label
+        const label = item.label || 'Unlabeled';
+        const labelClass = item.label ? `label-${item.label.toLowerCase().replace(/\s+/g, '')}` : '';
+
+        // Determine Tags
+        let tagsHtml = '';
+        if (item.ai_extracted) {
+            tagsHtml += '<span class="tag-pill purple">AI Extracted</span>';
         }
+        if (item.type === 'structured') {
+            tagsHtml += '<span class="tag-pill blue">Structured</span>';
+        } else {
+            tagsHtml += '<span class="tag-pill gray">Text</span>';
+        }
+        // Add domain as tag
+        tagsHtml += `<span class="tag-pill gray">${sourceDomain.split('.')[0]}</span>`;
 
-        card.innerHTML = `
-      <div style="display: flex; align-items: start; gap: 8px;">
-        <input type="checkbox" class="item-checkbox" data-index="${index}" style="margin-top: 4px;">
-        <div style="flex: 1;" class="item-content-wrapper" data-item-index="${index}">
-          <h4>${item.data.content}</h4>
-          <p>${item.source.title}</p>
-          ${item.enriched && Object.keys(item.enriched).length > 0 ?
-                `<div class="enriched-badge">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle;">
-                <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275z"/>
-              </svg>
-              Enriched
-            </div>` : ''}
-          ${item.ai_extracted ? '<div class="ai-extracted-badge">✨ AI Extracted</div>' : ''}
-          ${enrichedHtml}
-          ${structuredHtml}
-          ${validation.status !== 'valid' ?
-                `<div class="validation-badge ${validation.status}">${validation.issues[0]}</div>` : ''}
-          <div class="item-footer">
-            <span>${item.type}</span>
-            <span>${new Date(item.timestamp).toLocaleDateString()}</span>
-          </div>
-          ${qualifiesForExtraction && !item.ai_extracted ?
-                `<button class="ai-extract-btn" data-item-index="${index}">
-              🤖 Extract Structure with AI
-            </button>` : ''}
-        </div>
-      </div>
-    `;
-        container.appendChild(card);
+        // Format date
+        const date = new Date(item.timestamp);
+        const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const dateStr = `${formattedDate}, ${formattedTime}`;
+
+        // Row click handling is now managed via event delegation in setupEventListeners
+
+
+        row.innerHTML = `
+            <div class="col-checkbox"><input type="checkbox" class="item-checkbox" data-id="${item.id}"></div>
+            <div class="col-title">${item.data.title || item.data.name || item.data.content || item.data.raw_text || 'Untitled'}</div>
+            <div class="col-status"><span class="status-badge ${labelClass}">${label}</span></div>
+            <div class="col-tags">${tagsHtml}</div>
+            <div class="col-date">${dateStr}</div>
+            <div class="col-actions" style="position: relative;">
+                <button class="action-btn view-btn" title="View Details">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button class="action-btn more-btn" data-index="${index}" title="More Actions">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="19" cy="12" r="1"></circle>
+                        <circle cx="5" cy="12" r="1"></circle>
+                    </svg>
+                </button>
+                
+                <!-- Dropdown Menu -->
+                <div class="dropdown-menu" id="dropdown-${index}">
+                    <div style="padding: 4px 12px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase;">Set Label</div>
+                    <div class="dropdown-item label-btn" data-index="${index}" data-label="Work">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #1E40AF; display: inline-block;"></span>
+                        Work
+                    </div>
+                    <div class="dropdown-item label-btn" data-index="${index}" data-label="Personal">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #6B21A8; display: inline-block;"></span>
+                        Personal
+                    </div>
+                    <div class="dropdown-item label-btn" data-index="${index}" data-label="Important">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #991B1B; display: inline-block;"></span>
+                        Important
+                    </div>
+                    <div class="dropdown-item label-btn" data-index="${index}" data-label="To Read">
+                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #92400E; display: inline-block;"></span>
+                        To Read
+                    </div>
+                    <div style="height: 1px; background: #E5E7EB; margin: 4px 0;"></div>
+                    <div class="dropdown-item ai-extract-btn" data-item-index="${index}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275z"/>
+                        </svg>
+                        Extract Structure
+                    </div>
+                    <div class="dropdown-item delete delete-btn" data-index="${index}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                        Delete
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.appendChild(row);
     });
 
-    // Add click handlers for viewing details
-    document.querySelectorAll('.item-content-wrapper').forEach(wrapper => {
-        wrapper.style.cursor = 'pointer';
-        wrapper.addEventListener('click', async (e) => {
-            const index = parseInt(wrapper.dataset.itemIndex);
-            await showItemDetail(items[index]);
-        });
-    });
+    // Event listeners are now handled by delegation in setupEventListeners
 }
 
 async function showItemDetail(item) {
     const modal = document.getElementById('item-detail-modal');
     const detailBody = document.getElementById('detail-body');
+
+    // Get the item's index for AI extraction
+    const collection = await storage.getCollection(currentCollectionId);
+    const itemIndex = collection.items.findIndex(i => i.timestamp === item.timestamp && i.source.url === item.source.url);
 
     // Build AI extracted data section
     let aiExtractedSection = '';
@@ -188,27 +385,14 @@ async function showItemDetail(item) {
         originalTextSection = `
       <div class="detail-section">
         <h4>Original Text</h4>
-        <div class="detail-content" style="background: #f1f5f9;">
+        <div class="detail-content" style="background: #f1f5f9; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">
           ${item.data.raw_text}
         </div>
       </div>
     `;
     }
 
-    // Build enriched data section
-    let enrichedSection = '';
-    if (item.enriched && Object.keys(item.enriched).length > 0) {
-        enrichedSection = `
-      <div class="detail-section">
-        <h4>Enriched Data</h4>
-        <div class="detail-content">
-          ${Object.entries(item.enriched).map(([key, value]) =>
-            `<div style="margin-bottom: 8px;"><strong>${key}:</strong> ${value}</div>`
-        ).join('')}
-        </div>
-      </div>
-    `;
-    }
+
 
     // Build validation section
     const validation = ValidationManager.validateItem(item);
@@ -224,6 +408,30 @@ async function showItemDetail(item) {
     `;
     }
 
+    // Optional AI extraction button for non-extracted items
+    let aiExtractionButton = '';
+    if (!item.ai_extracted && item.data.content && item.data.content.split(/\s+/).length > 50) {
+        aiExtractionButton = `
+      <button id="extract-ai-btn" data-item-index="${itemIndex}" style="
+        margin-top: 16px;
+        padding: 10px 16px;
+        border: 1px solid #c084fc;
+        background: #faf5ff;
+        color: #7c3aed;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+        transition: all 0.15s;
+      ">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
+          <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275z"/>
+        </svg>
+        Extract Structure with AI (Optional)
+      </button>
+    `;
+    }
+
     detailBody.innerHTML = `
     ${aiExtractedSection}
     
@@ -232,11 +440,10 @@ async function showItemDetail(item) {
     ${!item.ai_extracted ? `
     <div class="detail-section">
       <h4>Content</h4>
-      <div class="detail-content">${item.data.content || 'No content'}</div>
+      <div class="detail-content" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">${item.data.content || 'No content'}</div>
+      ${aiExtractionButton}
     </div>
     ` : ''}
-    
-    ${enrichedSection}
     
     <div class="detail-section">
       <h4>Source</h4>
@@ -268,6 +475,23 @@ async function showItemDetail(item) {
     document.getElementById('close-detail-btn').onclick = () => {
         modal.classList.add('hidden');
     };
+
+    // Handle AI extraction if button exists
+    const extractBtn = document.getElementById('extract-ai-btn');
+    if (extractBtn) {
+        extractBtn.onmouseover = () => {
+            extractBtn.style.background = '#f3e8ff';
+            extractBtn.style.borderColor = '#a855f7';
+        };
+        extractBtn.onmouseout = () => {
+            extractBtn.style.background = '#faf5ff';
+            extractBtn.style.borderColor = '#c084fc';
+        };
+        extractBtn.onclick = async () => {
+            modal.classList.add('hidden');
+            await showExtractionModal(item, itemIndex);
+        };
+    }
 }
 
 // Helper function to determine if item should show AI extraction button
@@ -313,7 +537,197 @@ function showToast(message, duration = 3000) {
     }, duration);
 }
 
+// New function to handle collection export
+async function exportCollectionToCSV(collection) {
+    if (collection.items.length === 0) {
+        showToast('Collection is empty');
+        return;
+    }
+    // Automatically export with smart field detection
+    ExportManager.exportToCSV(collection);
+    showToast('✓ Exported CSV successfully!');
+}
+
 function setupEventListeners() {
+    // Global click listener to close dropdowns
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.action-btn.more-btn') && !e.target.closest('.dropdown-menu')) {
+            document.querySelectorAll('.dropdown-menu.visible').forEach(menu => {
+                menu.classList.remove('visible');
+            });
+        }
+    });
+
+    // Event Delegation for Items Container
+    const itemsContainer = document.getElementById('items-container');
+    if (itemsContainer) {
+        itemsContainer.addEventListener('click', async (e) => {
+            const target = e.target;
+
+            // 1. Handle Label Buttons
+            const labelBtn = target.closest('.label-btn');
+            if (labelBtn) {
+                console.log('=== LABEL BUTTON CLICKED ===');
+                e.stopPropagation();
+                const index = parseInt(labelBtn.dataset.index);
+                const label = labelBtn.dataset.label;
+                console.log('Index:', index, 'Label:', label);
+
+                // Close dropdown
+                const dropdown = document.getElementById(`dropdown-${index}`);
+                console.log('Dropdown found:', dropdown);
+                if (dropdown) dropdown.classList.remove('visible');
+
+                try {
+                    // Update item
+                    console.log('Fetching collection:', currentCollectionId);
+                    const collection = await storage.getCollection(currentCollectionId);
+                    console.log('Collection:', collection);
+                    console.log('Item before update:', collection.items[index]);
+
+                    collection.items[index].label = label;
+                    console.log('Item after update:', collection.items[index]);
+
+                    console.log('Saving to storage...');
+                    await storage.saveCollection(collection);
+                    console.log('Saved successfully');
+
+                    // Refresh view
+                    console.log('Refreshing view...');
+                    await selectCollection(currentCollectionId);
+                    console.log('View refreshed');
+                } catch (err) {
+                    console.error('ERROR updating label:', err);
+                }
+                return;
+            }
+
+            // 2. Handle AI Extract Buttons
+            const aiExtractBtn = target.closest('.ai-extract-btn');
+            if (aiExtractBtn) {
+                e.stopPropagation();
+                const index = parseInt(aiExtractBtn.dataset.itemIndex);
+
+                // Close dropdown
+                const dropdown = document.getElementById(`dropdown-${index}`);
+                if (dropdown) dropdown.classList.remove('visible');
+
+                const collection = await storage.getCollection(currentCollectionId);
+                const item = collection.items[index];
+                await showExtractionModal(item, index);
+                return;
+            }
+
+            // 3. Handle Delete Buttons
+            const deleteBtn = target.closest('.delete-btn');
+            if (deleteBtn) {
+                e.stopPropagation();
+                const index = parseInt(deleteBtn.dataset.index);
+                if (confirm('Are you sure you want to delete this item?')) {
+                    const collection = await storage.getCollection(currentCollectionId);
+                    collection.items.splice(index, 1);
+                    await storage.saveCollection(collection);
+                    await selectCollection(currentCollectionId);
+                }
+                return;
+            }
+
+            // 4. Handle More Buttons (Dropdown Toggle)
+            const moreBtn = target.closest('.more-btn');
+            if (moreBtn) {
+                e.stopPropagation();
+                const index = moreBtn.dataset.index;
+
+                // Close all other dropdowns
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    if (menu.id !== `dropdown-${index}`) {
+                        menu.classList.remove('visible');
+                    }
+                });
+
+                // Toggle current
+                const dropdown = document.getElementById(`dropdown-${index}`);
+                if (dropdown) {
+                    dropdown.classList.toggle('visible');
+                }
+                return;
+            }
+
+            // 5. Handle Label Badge Click (Toggle Dropdown)
+            const statusCol = target.closest('.col-status');
+            if (statusCol) {
+                e.stopPropagation();
+                const row = statusCol.closest('.table-row');
+                const index = row.dataset.index;
+
+                // Close all other dropdowns
+                document.querySelectorAll('.dropdown-menu').forEach(menu => {
+                    if (menu.id !== `dropdown-${index}`) {
+                        menu.classList.remove('visible');
+                    }
+                });
+
+                // Toggle current
+                const dropdown = document.getElementById(`dropdown-${index}`);
+                if (dropdown) {
+                    dropdown.classList.toggle('visible');
+                }
+                return;
+            }
+
+            // 6. Handle View Details (Title or View Button ONLY)
+            const viewBtn = target.closest('.view-btn');
+            const titleCol = target.closest('.col-title');
+
+            // Prevent if clicking checkbox
+            if (target.closest('.item-checkbox')) return;
+            // Prevent if clicking dropdown
+            if (target.closest('.dropdown-menu')) return;
+
+            let index = -1;
+            if (viewBtn) {
+                e.stopPropagation();
+                index = parseInt(viewBtn.closest('.table-row').dataset.index);
+            } else if (titleCol) {
+                // Title click
+                index = parseInt(titleCol.closest('.table-row').dataset.index);
+            }
+
+            if (index !== -1 && !isNaN(index)) {
+                const collection = await storage.getCollection(currentCollectionId);
+                if (collection && collection.items[index]) {
+                    const item = collection.items[index];
+                    // Navigate to item-view.html for full editing capabilities
+                    window.location.href = `item-view.html?collectionId=${currentCollectionId}&id=${item.id}`;
+                }
+            }
+        });
+    }
+
+    // Auth Event Listeners
+    const loggedOutBtn = document.getElementById('user-logged-out');
+    if (loggedOutBtn && window.AuthManager) {
+        loggedOutBtn.addEventListener('click', async () => {
+            console.log('Sign in clicked');
+            try {
+                await window.AuthManager.login();
+                showToast('Signed in successfully!');
+            } catch (error) {
+                console.error('Login failed', error);
+                showToast('Sign in failed: ' + (error.message || 'Unknown error'));
+            }
+        });
+    }
+
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn && window.AuthManager) {
+        logoutBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await window.AuthManager.logout();
+            showToast('Signed out');
+        });
+    }
+
     // New Collection Modal
     const modal = document.getElementById('new-collection-modal');
     const newBtn = document.getElementById('new-collection-btn');
@@ -334,20 +748,23 @@ function setupEventListeners() {
         }
     };
 
-    // Delete Collection Button
-    document.getElementById('delete-collection-btn').onclick = async () => {
-        if (!currentCollectionId) {
-            alert('No collection selected.');
-            return;
-        }
+    // Delete Collection Button (if it exists)
+    const deleteBtn = document.getElementById('delete-collection-btn');
+    if (deleteBtn) {
+        deleteBtn.onclick = async () => {
+            if (!currentCollectionId) {
+                alert('No collection selected.');
+                return;
+            }
 
-        if (confirm('Are you sure you want to delete this collection?')) {
-            await storage.deleteCollection(currentCollectionId);
-            currentCollectionId = null;
-            await loadCollections();
-            renderItems([]); // Clear view
-        }
-    };
+            if (confirm('Are you sure you want to delete this collection?')) {
+                await storage.deleteCollection(currentCollectionId);
+                currentCollectionId = null;
+                await loadCollections();
+                renderItems([]); // Clear view
+            }
+        };
+    }
 
     // Refresh Button
     document.getElementById('refresh-btn').onclick = async () => {
@@ -361,22 +778,6 @@ function setupEventListeners() {
     document.getElementById('select-all-checkbox').onchange = (e) => {
         const checkboxes = document.querySelectorAll('.item-checkbox');
         checkboxes.forEach(cb => cb.checked = e.target.checked);
-    };
-
-    // Export Button - Direct automatic export!
-    document.getElementById('export-btn').onclick = async () => {
-        if (currentCollectionId) {
-            const collection = await storage.getCollection(currentCollectionId);
-            if (collection.items.length === 0) {
-                showToast('Collection is empty');
-                return;
-            }
-            // Automatically export with smart field detection
-            ExportManager.exportToCSV(collection);
-            showToast('✓ Exported successfully!');
-        } else {
-            showToast('Please select a collection to export');
-        }
     };
 
     // Mapping Modal Logic
@@ -399,7 +800,7 @@ function setupEventListeners() {
         const sampleItem = collection.items[0];
         const sourceFields = [
             ...Object.keys(sampleItem.data),
-            ...Object.keys(sampleItem.enriched || {}),
+            ...Object.keys(sampleItem.source || {}),
             'source_url', 'source_title', 'timestamp'
         ];
 
@@ -485,48 +886,7 @@ function setupEventListeners() {
         document.body.removeChild(link);
     }
 
-    // Enrich Button
-    const enrichBtn = document.getElementById('enrich-btn');
-    enrichBtn.onclick = async () => {
-        if (!currentCollectionId) return;
 
-        // Get selected checkboxes
-        const checkboxes = document.querySelectorAll('.item-checkbox:checked');
-
-        if (checkboxes.length === 0) {
-            alert('Please select at least one item to enrich (use checkboxes).');
-            return;
-        }
-
-        const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
-
-        enrichBtn.disabled = true;
-        enrichBtn.textContent = 'Enriching...';
-
-        try {
-            const collection = await storage.getCollection(currentCollectionId);
-
-            // Only enrich selected items
-            const itemsToEnrich = selectedIndices.map(i => collection.items[i]);
-            const enrichedItems = await EnrichmentManager.enrichItems(itemsToEnrich, (completed, total) => {
-                enrichBtn.textContent = `Enriching ${completed}/${total}`;
-            });
-
-            // Update the selected items in the collection
-            selectedIndices.forEach((originalIndex, i) => {
-                collection.items[originalIndex] = enrichedItems[i];
-            });
-
-            await storage.saveCollection(collection);
-            await selectCollection(currentCollectionId); // Refresh view
-        } catch (error) {
-            console.error('Enrichment failed:', error);
-            alert('Enrichment failed. See console for details.');
-        } finally {
-            enrichBtn.disabled = false;
-            enrichBtn.textContent = 'Enrich';
-        }
-    };
 
     // Template Button & Modal
     const templateModal = document.getElementById('template-modal');
@@ -692,7 +1052,7 @@ function setupEventListeners() {
         const { item, itemIndex } = currentExtractionItem;
 
         // Gather edited fields
-        const inputs = extractionFieldsContainer.querySelectorAll('input');
+        const inputs = extractionFieldsContainer.querySelectorAll('input, textarea');
         const extractedFields = {};
         inputs.forEach(input => {
             const fieldName = input.dataset.fieldName;
@@ -706,11 +1066,19 @@ function setupEventListeners() {
         const collection = await storage.getCollection(currentCollectionId);
         const updatedItem = collection.items[itemIndex];
 
-        // Store original text
-        updatedItem.data.raw_text = updatedItem.data.content;
+        // Store original text - CRITICAL FIX: Ensure we don't lose the original content
+        const originalText = updatedItem.data.content || updatedItem.data.raw_text || '';
 
-        // Replace data with extracted fields
-        updatedItem.data = extractedFields;
+        // Replace data with extracted fields but KEEP original text
+        updatedItem.data = {
+            ...extractedFields,
+            raw_text: originalText,
+            // If we have a title in extracted fields, great. If not, maybe keep original content as fallback for display?
+            // But for 'structured' type, we usually rely on specific fields.
+            // Let's ensure 'content' is also there if needed for backward compatibility, 
+            // but 'raw_text' is the main one for "Original Text" view.
+            content: extractedFields.title || extractedFields.name || originalText.substring(0, 100) // Fallback for list view
+        };
 
         // Update type and flag
         updatedItem.type = 'structured';

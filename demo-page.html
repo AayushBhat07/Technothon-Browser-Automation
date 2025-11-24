@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo Page - Smart Web Collector Test</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            line-height: 1.6;
+            color: #333;
+            background: #f9fafb;
+        }
+
+        h1 {
+            color: #9F7EC1;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        h2 {
+            color: #A8C5E3;
+            margin-top: 40px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #E5D9F2;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            margin: 20px 0;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #C084FC;
+        }
+
+        .info-box {
+            background: #E5D9F2;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        code {
+            background: #f4f4f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', monospace;
+        }
+
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        li:before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: #9F7EC1;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>🚀 Smart Web Collector Demo</h1>
+        <p><strong>Welcome!</strong> This page contains sample content to test your Smart Web Collector extension.</p>
+        <p>Select any text below and right-click → <code>Save to Smart Collector</code> to see the table layout in
+            action!</p>
+    </div>
+
+    <div class="card">
+        <h2>📊 Product Information</h2>
+        <div class="info-box">
+            <strong>Product Name:</strong> UltraBook Pro 2024<br>
+            <strong>Price:</strong> $1,299.99<br>
+            <strong>SKU:</strong> UBP-2024-001<br>
+            <strong>Category:</strong> Electronics > Laptops<br>
+            <strong>In Stock:</strong> Yes
+        </div>
+        <p><strong>Description:</strong> The UltraBook Pro 2024 features a stunning 14-inch Retina display, M3 chip for
+            blazing performance, and all-day battery life. Perfect for professionals on the go.</p>
+
+        <h3>Key Features:</h3>
+        <ul>
+            <li>14-inch Liquid Retina XDR display</li>
+            <li>Apple M3 chip with 8-core CPU</li>
+            <li>16GB unified memory</li>
+            <li>512GB SSD storage</li>
+            <li>Up to 18 hours battery life</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>👤 Contact Information</h2>
+        <div class="highlight">
+            <strong>Name:</strong> Sarah Mitchell<br>
+            <strong>Email:</strong> sarah.mitchell@example.com<br>
+            <strong>Phone:</strong> +1 (555) 123-4567<br>
+            <strong>Company:</strong> TechCorp Industries<br>
+            <strong>Role:</strong> Senior Product Manager<br>
+            <strong>Website:</strong> https://techcorp.example.com
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📝 Meeting Notes</h2>
+        <p><strong>Date:</strong> January 21, 2025</p>
+        <p><strong>Attendees:</strong> Sarah Mitchell, John Doe, Emily Chen</p>
+
+        <h3>Discussion Points:</h3>
+        <p>We reviewed the Q1 roadmap and discussed upcoming product launches. Key decisions made:</p>
+        <ul>
+            <li>Launch date confirmed for March 15, 2025</li>
+            <li>Marketing budget approved at $50,000</li>
+            <li>Three new features to be prioritized</li>
+            <li>Weekly sync meetings scheduled for Mondays at 10 AM</li>
+        </ul>
+
+        <div class="highlight">
+            <strong>Action Items:</strong><br>
+            1. Sarah to finalize product specifications by Jan 28<br>
+            2. John to prepare marketing materials by Feb 5<br>
+            3. Emily to coordinate with design team for UI mockups
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔬 Research Article</h2>
+        <h3>The Future of Artificial Intelligence in Healthcare</h3>
+        <p><strong>Author:</strong> Dr. James Patterson<br>
+            <strong>Published:</strong> December 2024<br>
+            <strong>Journal:</strong> Medical Technology Review
+        </p>
+
+        <p><strong>Abstract:</strong> This study examines the transformative impact of AI technologies on healthcare
+            delivery systems. We analyzed data from 15 major hospitals implementing AI-driven diagnostic tools and found
+            a 35% improvement in early disease detection rates.</p>
+
+        <p><strong>Key Findings:</strong></p>
+        <ul>
+            <li>AI diagnostic accuracy improved to 94.2%</li>
+            <li>Patient wait times reduced by 40%</li>
+            <li>Cost savings averaged $2.3M per hospital annually</li>
+            <li>Healthcare professional satisfaction increased by 28%</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>💡 Quick Tips</h2>
+        <div class="info-box">
+            <h3>How to Use Smart Web Collector:</h3>
+            <ol style="list-style: decimal; padding-left: 20px;">
+                <li>Select any text on this page</li>
+                <li>Right-click and choose "Save to Smart Collector"</li>
+                <li>Choose a collection name (or create a new one)</li>
+                <li>View your organized data in the side panel</li>
+                <li>See the beautiful table layout with type badges, dates, and actions!</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="card" style="background: linear-gradient(135deg, #E5D9F2 0%, #D4E9F7 100%); text-align: center;">
+        <h2 style="color: #333; border: none;">✨ Ready to Test!</h2>
+        <p style="font-size: 1.1em; margin: 20px 0;">Select different sections above to see how various content types
+            appear in your table layout.</p>
+    </div>
+
+</body>
+
+</html>

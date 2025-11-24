@@ -8,8 +8,16 @@
     "scripting",
     "storage",
     "contextMenus",
-    "notifications"
+    "notifications",
+    "identity"
   ],
+  "oauth2": {
+    "client_id": "746562803104-cdp9jr2ur14t1ibe18828tap05pca42m.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.email",
+      "https://www.googleapis.com/auth/userinfo.profile"
+    ]
+  },
   "host_permissions": [
     "https://generativelanguage.googleapis.com/*"
   ],

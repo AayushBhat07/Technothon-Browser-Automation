@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Dashboard Demo Data</title>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #F5F5F7;
+            color: #2D2D2D;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #9F7EC1;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+            border: 1px solid #E5E7EB;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .tag.design {
+            background: #E0E7FF;
+            color: #3730A3;
+        }
+
+        .tag.marketing {
+            background: #FEF3C7;
+            color: #92400E;
+        }
+
+        .tag.dev {
+            background: #DCFCE7;
+            color: #166534;
+        }
+
+        h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+
+        p {
+            color: #6B7280;
+            font-size: 0.95em;
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            color: #9CA3AF;
+            border-top: 1px solid #F3F4F6;
+            padding-top: 15px;
+        }
+
+        .instructions {
+            background: #EBE7F6;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 1px solid #D6BCFA;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>🚀 Dashboard Demo Data</h1>
+        <p>Select text from these cards and save to Smart Collector to populate your new dashboard!</p>
+    </div>
+
+    <div class="instructions">
+        <strong>How to populate your dashboard:</strong>
+        <ol>
+            <li>Select the text inside any card below.</li>
+            <li>Right-click and select "Save to Smart Collector".</li>
+            <li>Create a collection named "Project Assets" or "Design Resources".</li>
+            <li>Repeat for 3-4 items to see the table layout, status badges, and tags in action!</li>
+        </ol>
+    </div>
+
+    <div class="grid">
+        <!-- Item 1 -->
+        <div class="card">
+            <span class="tag design">Design</span>
+            <h3>Website Redesign Mockup</h3>
+            <p>Final high-fidelity mockups for the new homepage redesign. Includes mobile and desktop views with updated
+                color palette and typography system.</p>
+            <div class="meta">
+                <span>Due: Oct 25</span>
+                <span>Status: In Progress</span>
+            </div>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="card">
+            <span class="tag marketing">Marketing</span>
+            <h3>Q3 Marketing Plan Draft</h3>
+            <p>Comprehensive strategy document outlining social media campaigns, email marketing sequences, and paid ad
+                budget allocation for Q3.</p>
+            <div class="meta">
+                <span>Due: Yesterday</span>
+                <span>Status: Under Review</span>
+            </div>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="card">
+            <span class="tag design">Branding</span>
+            <h3>Logo Concepts V2</h3>
+            <p>Second round of logo explorations focusing on minimalism and geometric shapes. Contains 5 variations with
+                monochrome options.</p>
+            <div class="meta">
+                <span>Due: Oct 28</span>
+                <span>Status: Completed</span>
+            </div>
+        </div>
+
+        <!-- Item 4 -->
+        <div class="card">
+            <span class="tag dev">Development</span>
+            <h3>Client Presentation Slides</h3>
+            <p>Keynote presentation for the upcoming client review meeting. Covers project timeline, deliverables
+                status, and next steps.</p>
+            <div class="meta">
+                <span>Due: Tomorrow</span>
+                <span>Status: Pending</span>
+            </div>
+        </div>
+
+        <!-- Item 5 -->
+        <div class="card">
+            <span class="tag design">Visuals</span>
+            <h3>Social Media Graphics Pack</h3>
+            <p>Set of 10 templates for Instagram stories and LinkedIn posts. Consistent with the new brand guidelines.
+            </p>
+            <div class="meta">
+                <span>Due: Oct 30</span>
+                <span>Status: In Progress</span>
+            </div>
+        </div>
+
+        <!-- Item 6 -->
+        <div class="card">
+            <span class="tag dev">Frontend</span>
+            <h3>React Component Library</h3>
+            <p>Documentation and code snippets for the shared UI component library. Includes buttons, inputs, and modal
+                dialogs.</p>
+            <div class="meta">
+                <span>Due: Nov 05</span>
+                <span>Status: In Progress</span>
+            </div>
+        </div>
+    </div>
+
+</body>
+
+</html>
