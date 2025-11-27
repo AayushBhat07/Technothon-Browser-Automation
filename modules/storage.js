@@ -137,6 +137,35 @@ class StorageManager {
         collection.items.push(item);
         await this.saveCollection(collection);
     }
+
+    /**
+     * Moves an item from one collection to another.
+     * @param {string} itemId - ID of the item to move
+     * @param {string} fromCollectionId - Source collection ID
+     * @param {string} toCollectionId - Destination collection ID
+     * @returns {Promise<void>}
+     */
+    async moveItemToCollection(itemId, fromCollectionId, toCollectionId) {
+        const fromCollection = await this.getCollection(fromCollectionId);
+        const toCollection = await this.getCollection(toCollectionId);
+
+        if (!fromCollection) throw new Error('Source collection not found');
+        if (!toCollection) throw new Error('Destination collection not found');
+
+        // Find the item in the source collection
+        const itemIndex = fromCollection.items.findIndex(item => item.id === itemId);
+        if (itemIndex === -1) throw new Error('Item not found in source collection');
+
+        // Remove from source
+        const [item] = fromCollection.items.splice(itemIndex, 1);
+
+        // Add to destination
+        toCollection.items.push(item);
+
+        // Save both collections
+        await this.saveCollection(fromCollection);
+        await this.saveCollection(toCollection);
+    }
 }
 
 export const storage = new StorageManager();

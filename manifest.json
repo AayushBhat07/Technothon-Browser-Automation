@@ -34,7 +34,8 @@
         "<all_urls>"
       ],
       "js": [
-        "content.js"
+        "content.js",
+        "content-magic-bar.js"
       ]
     }
   ],
@@ -43,6 +44,15 @@
   },
   "side_panel": {
     "default_path": "sidepanel.html"
+  },
+  "commands": {
+    "toggle-magic-bar": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Toggle Magic Extract Bar"
+    }
   },
   "icons": {
     "16": "assets/icons/icon16.png",

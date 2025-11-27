@@ -229,7 +229,15 @@
             <div id="detail-body">
                 <!-- Details will be injected here -->
             </div>
-            <div class="modal-actions">
+            <div class="modal-actions"
+                style="display: flex; gap: 8px; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <select id="move-to-collection-select"
+                        style="padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 13px;">
+                        <option value="">Move to...</option>
+                    </select>
+                    <button id="move-item-btn" class="secondary-btn" style="display: none;">Move</button>
+                </div>
                 <button id="close-detail-btn" class="primary-btn">Close</button>
             </div>
         </div>

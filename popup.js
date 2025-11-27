@@ -64,4 +64,17 @@ function setupEventListeners() {
         // Placeholder for export functionality
         alert('Export feature coming soon!');
     });
+
+    document.getElementById('magic-btn').addEventListener('click', async () => {
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab) {
+                // Script is already loaded via manifest, just send the message
+                await chrome.tabs.sendMessage(tab.id, { action: 'toggleMagicBar' });
+                window.close(); // Close popup
+            }
+        } catch (error) {
+            console.error('Failed to toggle Magic Bar:', error);
+        }
+    });
 }

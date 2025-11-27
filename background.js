@@ -127,3 +127,90 @@ async function handleSaveSelection(data, tabId) {
         message: "Added to \"" + collectionName + "\" (" + detection.type + ")"
     });
 }
+
+// Magic Bar Command Handler
+chrome.commands.onCommand.addListener((command) => {
+    if (command === 'toggle-magic-bar') {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                // Script is already loaded via manifest, just send the message
+                chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleMagicBar' })
+                    .catch((err) => {
+                        console.warn('Failed to toggle Magic Bar:', err);
+                    });
+            }
+        });
+    }
+});
+
+import { aiManager } from './modules/ai.js';
+
+// Magic Bar Message Handler
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'aiExtract') {
+        aiManager.extractAndVerify(request.text, request.query)
+            .then(data => sendResponse({ success: true, data: data }))
+            .catch(error => sendResponse({ success: false, error: error.message }));
+        return true; // Async response
+    }
+
+    if (request.action === 'saveExtractedData') {
+        handleSaveExtractedData(request);
+    }
+});
+
+async function handleSaveExtractedData(request) {
+    try {
+        // Create a new collection for this extraction or add to "AI Extractions"
+        const collectionName = "AI Extractions";
+        let collections = await storage.getCollections();
+        let targetCollection = collections.find(c => c.name === collectionName);
+
+        if (!targetCollection) {
+            const newId = await storage.saveCollection({
+                name: collectionName,
+                items: []
+            });
+            targetCollection = await storage.getCollection(newId);
+        }
+
+        // Format the data for better display
+        let formattedContent = '';
+        if (request.data.length === 1 && Object.keys(request.data[0]).length === 1) {
+            // Single summary/paragraph - extract the text directly
+            const key = Object.keys(request.data[0])[0];
+            formattedContent = `${key}:\n\n${request.data[0][key]}`;
+        } else {
+            // List of items - format as readable text
+            const headers = Object.keys(request.data[0]);
+            formattedContent = request.data.map((item, index) => {
+                const fields = headers.map(h => `${h}: ${item[h]}`).join('\n');
+                return `Item ${index + 1}:\n${fields}`;
+            }).join('\n\n');
+        }
+
+        const newItem = {
+            type: 'ai_extraction',
+            data: {
+                content: formattedContent,
+                structured: request.data,
+                query: request.query
+            },
+            source: request.source,
+            enriched: {},
+            validation: { status: 'valid', issues: [] },
+            tags: ['ai-extracted']
+        };
+
+        await storage.addItemToCollection(targetCollection.id, newItem);
+
+        chrome.notifications.create({
+            type: 'basic',
+            iconUrl: 'assets/icons/icon48.png',
+            title: 'Data Saved',
+            message: `Saved ${request.data.length} items to "AI Extractions"`
+        });
+    } catch (error) {
+        console.error('Error saving extracted data:', error);
+    }
+}

@@ -472,6 +472,46 @@ async function showItemDetail(item) {
 
     modal.classList.remove('hidden');
 
+    // Populate collection move dropdown
+    const moveSelect = document.getElementById('move-to-collection-select');
+    const moveBtn = document.getElementById('move-item-btn');
+    const allCollections = await storage.getCollections();
+
+    // Clear existing options (except first)
+    moveSelect.innerHTML = '<option value="">Move to...</option>';
+
+    // Add all collections except the current one
+    allCollections.forEach(coll => {
+        if (coll.id !== currentCollectionId) {
+            const option = document.createElement('option');
+            option.value = coll.id;
+            option.textContent = coll.name;
+            moveSelect.appendChild(option);
+        }
+    });
+
+    // Show/hide move button based on selection
+    moveSelect.onchange = () => {
+        moveBtn.style.display = moveSelect.value ? 'block' : 'none';
+    };
+
+    // Handle move button click
+    moveBtn.onclick = async () => {
+        const targetCollectionId = moveSelect.value;
+        if (!targetCollectionId) return;
+
+        try {
+            await storage.moveItemToCollection(item.id, currentCollectionId, targetCollectionId);
+            modal.classList.add('hidden');
+            // Refresh the collection view
+            await loadCollectionItems(currentCollectionId);
+            alert('Item moved successfully!');
+        } catch (error) {
+            console.error('Error moving item:', error);
+            alert('Failed to move item: ' + error.message);
+        }
+    };
+
     document.getElementById('close-detail-btn').onclick = () => {
         modal.classList.add('hidden');
     };

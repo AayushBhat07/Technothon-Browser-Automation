@@ -203,6 +203,173 @@ Rules:
             return 'An unexpected error occurred. Please try again.';
         }
     }
+    /**
+     * Extracts specific data based on a user query
+     * @param {string} text - The page text content
+     * @param {string} query - The user's natural language query
+     * @returns {Promise<Array<Object>>} Extracted data as an array of objects
+     */
+    /**
+     * Extracts specific data based on a user query (Step 1: Extraction)
+     * @param {string} text - The page text content
+     * @param {string} query - The user's natural language query
+     * @returns {Promise<Array<Object>>} Extracted data as an array of objects
+     */
+    async extractData(text, query) {
+        const prompt = `You are a precise data extraction assistant.
+        
+User Query: "${query}"
+
+Context Text (from webpage):
+"${text}"
+
+Instructions:
+1. Analyze the text to find data matching the User Query.
+2. **IMPORTANT: Prioritize data that appears LATER in the text (chronologically more recent).**
+3. **FORMATTING RULE:**
+   - If the user asks for **Data Extraction/Table/List** (e.g., "extract names", "get all emails", "in table form", "find contacts"), return a JSON ARRAY of objects where each object represents one item.
+   - If the user asks for a **Summary/Explanation** (e.g., "summarize", "what is the problem", "explain"), return a JSON ARRAY with a **SINGLE OBJECT**.
+     - **CRITICAL:** Combine ALL relevant sections (Problem, Solution, Context, Bonus Points) into a **SINGLE STRING** value within that object.
+     - Use newlines (\\n) to separate sections within the string.
+     - Do NOT return multiple objects for different parts of the summary.
+4. Each object should have consistent keys based on the data found.
+5. Clean the data (remove extra whitespace).
+6. **Return at MOST 50 results.**
+7. Return ONLY the JSON array. No markdown, no explanation.
+
+Example Output (List):
+[{"Feature": "Save"}, {"Feature": "Export"}]
+
+Example Output (Summary):
+[{"Problem Statement": "The problem is X.\n\nDesired Solution:\nThe solution should be Y.\n\nBonus Points:\n- Point A\n- Point B"}]`;
+
+        try {
+            const response = await this.callGoogleAI(prompt, { temperature: 0.1 });
+
+            console.log('Raw AI Extraction Response:', response);
+
+            let jsonString = response.trim();
+            // Clean markdown
+            if (jsonString.startsWith('```json')) {
+                jsonString = jsonString.replace(/^```json\n/, '').replace(/\n```$/, '');
+            } else if (jsonString.startsWith('```')) {
+                jsonString = jsonString.replace(/^```\n/, '').replace(/\n```$/, '');
+            }
+
+            try {
+                const data = JSON.parse(jsonString);
+
+                if (!Array.isArray(data)) {
+                    return [data];
+                }
+
+                // Normalize: If array contains strings, convert to objects
+                if (data.length > 0 && typeof data[0] === 'string') {
+                    return data.map(item => ({ "Extracted Result": item }));
+                }
+
+                return data;
+            } catch (parseError) {
+                console.error('JSON Parse Error:', parseError);
+                throw new Error('Failed to parse AI response.');
+            }
+        } catch (error) {
+            console.error('AI Extraction Error:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Verifies extracted data against source text (Step 2: Verification)
+     * @param {string} text - The original source text
+     * @param {Array<Object>} data - The extracted data to verify
+     * @param {string} query - The original user query
+     * @returns {Promise<Array<Object>>} Verified and corrected data
+     */
+    async verifyExtractedData(text, data, query) {
+        if (!data || data.length === 0) return data;
+
+        // Limit text for verification context if needed, but try to keep as much as possible
+        // We send the extracted JSON and ask AI to check if it's supported by the text
+        const prompt = `You are a strict Data Verification Auditor.
+        
+User Query: "${query}"
+
+Original Source Text:
+"${text}"
+
+Extracted Data (to verify):
+${JSON.stringify(data, null, 2)}
+
+Instructions:
+1. Verify that EACH item in the "Extracted Data" is actually present in the "Original Source Text".
+2. **REMOVE** any items that are hallucinations or not supported by the text.
+3. **CORRECT** any values that are slightly wrong.
+4. **KEEP** items that are correct.
+5. Ensure the data matches the User Query intent.
+6. **FORMATTING RULE:**
+   - If the input is a **List**, return a verified List.
+   - If the input is a **Summary/Text Block** (single object with long text), verify the facts within the text but **KEEP IT AS A TEXT BLOCK**. Do not split it into a list unless explicitly asked.
+7. Return the CLEANED, VERIFIED JSON array.
+8. Return ONLY the JSON array. No markdown, no explanation.
+
+Example Output (List):
+[{"Feature": "Right-click save"}, {"Feature": "Auto-capture"}]
+
+Example Output (Summary):
+[{"Summary": "The verified problem is that users..."}]`;
+
+        try {
+            const response = await this.callGoogleAI(prompt, { temperature: 0.0 }); // Zero temp for strict verification
+            console.log('Raw AI Verification Response:', response);
+
+            let jsonString = response.trim();
+            if (jsonString.startsWith('```json')) {
+                jsonString = jsonString.replace(/^```json\n/, '').replace(/\n```$/, '');
+            } else if (jsonString.startsWith('```')) {
+                jsonString = jsonString.replace(/^```\n/, '').replace(/\n```$/, '');
+            }
+
+            let verifiedData = JSON.parse(jsonString);
+
+            if (!Array.isArray(verifiedData)) {
+                verifiedData = [verifiedData];
+            }
+
+            // Normalize: If array contains strings, convert to objects
+            if (verifiedData.length > 0 && typeof verifiedData[0] === 'string') {
+                return verifiedData.map(item => ({ "Extracted Result": item }));
+            }
+
+            return verifiedData;
+        } catch (error) {
+            console.warn('Verification failed, returning original data:', error);
+            return data; // Fallback to original data if verification fails
+        }
+    }
+
+    /**
+     * Orchestrates the Extraction -> Verification pipeline
+     * @param {string} text - Page text
+     * @param {string} query - User query
+     * @returns {Promise<Array<Object>>} Final verified data
+     */
+    async extractAndVerify(text, query) {
+        console.log('[AI Manager] Starting Step 1: Extraction...');
+        const extractedData = await this.extractData(text, query);
+
+        // Optimization: Only verify if text is large enough (> 15k chars)
+        // Small pages don't usually need verification and it saves time/cost
+        if (text.length > 15000) {
+            console.log(`[AI Manager] Text length (${text.length}) exceeds threshold. Starting Step 2: Verification...`);
+            const verifiedData = await this.verifyExtractedData(text, extractedData, query);
+            console.log(`[AI Manager] Verification complete. Final count: ${verifiedData.length} items.`);
+            return verifiedData;
+        } else {
+            console.log(`[AI Manager] Text length (${text.length}) below threshold. Skipping verification step.`);
+            return extractedData;
+        }
+    }
 }
 
 export const aiManager = new AIManager();
