@@ -694,42 +694,12 @@ function setupEventListeners() {
 
             const mappedItems = MappingManager.applyMapping(collection.items, finalMapping);
 
-            // Create a temporary collection object for export
-            const exportCollection = {
-                name: collection.name,
-                items: mappedItems.map(item => ({
-                    data: item, // Hack to fit existing export structure
-                    type: 'mapped',
-                    source: {},
-                    timestamp: new Date().toISOString()
-                }))
-            };
-
-            // Override export to handle mapped items specially
-            exportMappedCSV(exportCollection);
+            // Use ExportManager to handle mapped items export
+            ExportManager.exportMappedItems(mappedItems, collection.name);
             mappingModal.classList.add('hidden');
         };
     }
 
-    function exportMappedCSV(collection) {
-        const items = collection.items.map(i => i.data);
-        if (items.length === 0) return;
-
-        const headers = Object.keys(items[0]);
-        const csvContent = [
-            headers.join(','),
-            ...items.map(item => headers.map(h => `"${(item[h] || '').toString().replace(/"/g, '""')}"`).join(','))
-        ].join('\n');
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${collection.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_export.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
 
 
 

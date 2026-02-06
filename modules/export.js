@@ -88,14 +88,43 @@ export const ExportManager = {
     },
 
     /**
-     * Builds CSV content from items and fields
-     * @param {Array} items - The items to export
-     * @param {Array} fields - The field definitions
+     * Exports already mapped items to CSV
+     * @param {Array} mappedItems - Array of objects with final column names as keys
+     * @param {string} collectionName - Name for the file
+     */
+    exportMappedItems(mappedItems, collectionName) {
+        if (!mappedItems || mappedItems.length === 0) return;
+
+        const headers = Object.keys(mappedItems[0]);
+        const csvContent = this.buildCSVFromMapped(mappedItems, headers);
+        this.downloadCSV(csvContent, collectionName);
+    },
+
+    /**
+     * Builds CSV content from already mapped items
+     * @param {Array} items - The mapped items
+     * @param {Array} headers - The column names
      * @returns {string} - CSV content
      */
+    buildCSVFromMapped(items, headers) {
+        const headerRow = headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
+
+        const rows = items.map(item => {
+            return headers.map(header => {
+                const value = item[header] || '';
+                return this.sanitizeCSVValue(value);
+            }).join(',');
+        });
+
+        return [headerRow, ...rows].join('\n');
+    },
+
+    /**
+     * Builds CSV content from raw items and field definitions
+     */
     buildCSV(items, fields) {
-        // Header row
-        const headers = fields.map(f => f.name);
+        // Header row - escaped
+        const headers = fields.map(f => `"${f.name.replace(/"/g, '""')}"`).join(',');
 
         // Data rows
         const rows = items.map(item => {
@@ -107,7 +136,6 @@ export const ExportManager = {
                 } else if (field.source === 'enriched') {
                     value = item.enriched?.[field.key] || '';
                 } else if (field.source === 'meta') {
-                    // Handle metadata fields
                     if (field.fieldKey === 'type') value = item.type || '';
                     else if (field.fieldKey === 'source.title') value = item.source?.title || '';
                     else if (field.fieldKey === 'source.url') value = item.source?.url || '';
@@ -115,28 +143,35 @@ export const ExportManager = {
                     else if (field.fieldKey === 'ai_extracted') value = item.ai_extracted ? 'Yes' : 'No';
                 }
 
-                // Handle arrays and objects
-                if (Array.isArray(value)) {
-                    // For arrays, join with newlines for better readability in CSV
-                    value = value.join('\n');
-                } else if (typeof value === 'object' && value !== null) {
-                    value = JSON.stringify(value);
-                }
-
-                // Convert to string, preserve newlines, and escape quotes properly
-                // In CSV format, fields with newlines must be quoted (which we do)
-                // and quotes within the field must be escaped as double quotes
-                const stringValue = String(value);
-                const escapedValue = stringValue.replace(/"/g, '""');
-
-                return `"${escapedValue}"`;
-            });
+                return this.sanitizeCSVValue(value);
+            }).join(',');
         });
 
-        return [
-            headers.join(','),
-            ...rows.map(row => row.join(','))
-        ].join('\n');
+        return [headers, ...rows].join('\n');
+    },
+
+    /**
+     * Robust CSV value sanitization
+     */
+    sanitizeCSVValue(value) {
+        if (value === null || value === undefined) return '""';
+
+        let stringValue = '';
+
+        if (Array.isArray(value)) {
+            // Join arrays with newlines, but handle objects inside arrays if any
+            stringValue = value.map(v =>
+                (typeof v === 'object' && v !== null) ? JSON.stringify(v) : String(v)
+            ).join('\n');
+        } else if (typeof value === 'object') {
+            stringValue = JSON.stringify(value);
+        } else {
+            stringValue = String(value);
+        }
+
+        // Escape quotes by doubling them
+        const escaped = stringValue.replace(/"/g, '""');
+        return `"${escaped}"`;
     },
 
     /**
