@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Collector - Collection Workspace</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --text-muted: #9CA3AF;
+            --bg-paper: #FDFDFD;
+            --primary: #6C47FF;
+            --border: #E5E7EB;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body {
+            background: var(--bg-paper);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        /* Minimal Header */
+        .header {
+            width: 100%;
+            max-width: 1000px;
+            padding: 32px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .breadcrumb {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 500;
+        }
+
+        .breadcrumb span {
+            color: var(--text-primary);
+        }
+
+        .close-btn {
+            cursor: pointer;
+            transition: color 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        .action-btns {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .export-btn {
+            background: #F3F4F6;
+            color: #4B5563;
+            border: 1px solid #E5E7EB;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            text-decoration: none;
+        }
+
+        .export-btn:hover {
+            background: white;
+            color: var(--primary);
+            border-color: var(--primary);
+            box-shadow: 0 4px 12px rgba(108, 71, 255, 0.1);
+        }
+
+        .export-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .close-btn:hover {
+            color: var(--text-primary);
+        }
+
+        /* Content Area */
+        .workspace {
+            width: 100%;
+            max-width: 900px;
+            padding: 40px 24px 120px 24px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #collection-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            letter-spacing: -1px;
+            line-height: 1.1;
+        }
+
+        /* Item Rendering */
+        #content-area {
+            line-height: 1.7;
+            font-size: 18px;
+            color: #2D3748;
+        }
+
+        .item-block {
+            margin-bottom: 48px;
+            padding-bottom: 40px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .item-block:last-child {
+            border-bottom: none;
+        }
+
+        .item-meta {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .item-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        /* AI Transformed Content */
+        .ai-result {
+            padding: 32px;
+            background: #F8FAFC;
+            border-radius: 24px;
+            border: 1px solid #E2E8F0;
+            font-size: 17px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+            position: relative;
+        }
+
+        .ai-badge {
+            position: absolute;
+            top: -12px;
+            left: 24px;
+            background: var(--primary);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* Floating AI Bar */
+        .chat-panel {
+            position: fixed;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 650px;
+            padding: 0 24px;
+            z-index: 1000;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+            padding: 8px;
+            display: flex;
+            gap: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            border: none;
+            font-size: 16px;
+            outline: none;
+            padding: 12px 16px;
+            background: transparent;
+        }
+
+        .send-btn {
+            background: var(--text-primary);
+            color: white;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, background 0.2s;
+        }
+
+        .send-btn:hover {
+            background: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Loading State */
+        .pulse {
+            animation: pulse-animation 2s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        /* Markdown Styles for AI Result */
+        .ai-result h1,
+        .ai-result h2,
+        .ai-result h3 {
+            margin: 24px 0 12px 0;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        .ai-result p {
+            margin-bottom: 16px;
+        }
+
+        .ai-result ul,
+        .ai-result ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        .ai-result li {
+            margin-bottom: 8px;
+        }
+
+        .ai-result table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 15px;
+        }
+
+        .ai-result th {
+            background: #F1F5F9;
+            text-align: left;
+            padding: 12px;
+            border: 1px solid #E2E8F0;
+        }
+
+        .ai-result td {
+            padding: 12px;
+            border: 1px solid #E2E8F0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="breadcrumb">Collections / <span id="breadcrumb-current">...</span></div>
+        <div class="action-btns">
+            <button id="export-sheets-btn" class="export-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                Export to Sheets
+            </button>
+            <button id="export-docs-btn" class="export-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <line x1="10" y1="9" x2="8" y2="9"></line>
+                </svg>
+                Export to Docs
+            </button>
+            <div class="close-btn" id="back-btn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+                Close
+            </div>
+        </div>
+    </div>
+
+    <div class="workspace">
+        <h1 id="collection-title">Loading Workspace...</h1>
+
+        <div id="content-area">
+            <!-- Items or AI results will be rendered here -->
+            <div class="item-block pulse">
+                <div class="item-meta">Please wait while we load your collection</div>
+                <div class="item-title">Initializing...</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-panel">
+        <div class="chat-container">
+            <input type="text" id="ai-input" class="chat-input"
+                placeholder="Ask AI to format, summarize, or transform this collection...">
+            <button id="ai-send-btn" class="send-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- MARKDOWN PARSER (Using marked.js for simplicity in rendering AI results) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script type="module" src="collection-view.js"></script>
+</body>
+
+</html>

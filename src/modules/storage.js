@@ -93,6 +93,7 @@ class StorageManager {
      * @returns {Promise<Object>}
      */
     async getCollection(id) {
+        if (!id) return null;
         await this.open();
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction([STORE_COLLECTIONS], 'readonly');

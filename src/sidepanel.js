@@ -6,46 +6,50 @@ import { MappingManager } from './modules/mapping.js';
 import { TemplateManager } from './modules/templates.js';
 import { aiManager } from './modules/ai.js';
 
+import { authManager } from './modules/auth.js';
+
 let currentCollectionId = null;
 let currentExtractionItem = null;
-
-// Helper to wait for AuthManager to be available
-async function waitForAuthManager(maxAttempts = 10) {
-    for (let i = 0; i < maxAttempts; i++) {
-        if (window.AuthManager) {
-            console.log('AuthManager found:', window.AuthManager);
-            console.log('AuthManager type:', typeof window.AuthManager);
-            console.log('AuthManager.init type:', typeof window.AuthManager.init);
-            if (typeof window.AuthManager.init === 'function') {
-                return true;
-            }
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
-    return false;
-}
 
 document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Storage
     await storage.open();
 
-    // Initialize Auth (Global from auth.js) - wait for it to be available
-    const authAvailable = await waitForAuthManager();
-    if (authAvailable) {
-        try {
-            await window.AuthManager.init();
-            // Subscribe to Auth Changes
-            window.AuthManager.subscribe(updateUserProfileUI);
-        } catch (error) {
-            console.error('AuthManager initialization failed:', error);
-        }
-    } else {
-        console.warn('AuthManager not available after waiting');
+    // Initialize Theme
+    const savedTheme = localStorage.getItem('sidepanel-theme') || 'theme-modern';
+    document.body.className = savedTheme;
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+        themeSelect.value = savedTheme;
+        themeSelect.addEventListener('change', (e) => {
+            const newTheme = e.target.value;
+            document.body.className = newTheme;
+            localStorage.setItem('sidepanel-theme', newTheme);
+        });
+    }
+
+    // Initialize Auth directly
+    try {
+        await authManager.init();
+        // Subscribe to Auth Changes
+        authManager.subscribe(updateUserProfileUI);
+    } catch (error) {
+        console.error('AuthManager initialization failed:', error);
     }
 
     // Load initial data
     await loadCollections();
     await updateDashboardStats();
+
+    // Check for collectionId in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const colId = urlParams.get('collectionId');
+    if (colId) {
+        await selectCollection(colId);
+    } else {
+        await showDashboard(); // Default view
+    }
+
     setupEventListeners();
 });
 
@@ -60,8 +64,16 @@ function updateUserProfileUI(user) {
         // User is signed in
         loggedInView.style.display = 'flex';
         loggedOutView.style.display = 'none';
-        userAvatar.src = user.picture;
-        userName.textContent = user.name;
+
+        if (userAvatar) userAvatar.src = user.picture || '';
+        if (userName) userName.textContent = user.name || user.email || 'User';
+
+        const welcomeName = document.getElementById('user-name-welcome');
+        if (welcomeName && user.name) {
+            welcomeName.textContent = user.name.split(' ')[0];
+        } else if (welcomeName) {
+            welcomeName.textContent = 'Collector';
+        }
     } else {
         // User is signed out
         loggedInView.style.display = 'none';
@@ -147,26 +159,42 @@ async function updateDashboardStats() {
 
 async function loadCollections() {
     const collections = await storage.getCollections();
-    const list = document.getElementById('collections-list');
+    const list = document.getElementById('collection-list');
+    if (!list) return;
     list.innerHTML = '';
 
+    // Add "Dashboard" link
+    const dashboardItem = document.createElement('div');
+    dashboardItem.className = `collection-item ${!currentCollectionId ? 'active' : ''}`;
+    dashboardItem.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span>Overview</span>
+        </div>
+    `;
+    dashboardItem.onclick = () => showDashboard();
+    dashboardItem.ondblclick = () => {
+        const url = chrome.runtime.getURL('sidepanel.html');
+        chrome.tabs.create({ url });
+    };
+    list.appendChild(dashboardItem);
+
     collections.forEach(c => {
-        const li = document.createElement('li');
+        const li = document.createElement('div');
         li.className = `collection-item ${c.id === currentCollectionId ? 'active' : ''}`;
         li.innerHTML = `
-      <span class="collection-name">${c.name}</span>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+        <span class="collection-name">${c.name}</span>
+      </div>
       <div style="display: flex; align-items: center; gap: 6px;">
         <span class="collection-count">${c.items.length}</span>
-        <button class="collection-export-btn" data-collection-id="${c.id}" title="Export CSV" onclick="event.stopPropagation();">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-        </button>
       </div>
     `;
-        li.onclick = () => selectCollection(c.id);
+        li.onclick = () => {
+            const url = chrome.runtime.getURL(`collection-view.html?id=${c.id}`);
+            chrome.tabs.create({ url });
+        };
         list.appendChild(li);
     });
 
@@ -184,9 +212,40 @@ async function loadCollections() {
     await updateDashboardStats();
 
     // Select first collection by default if none selected
-    if (!currentCollectionId && collections.length > 0) {
+    if (false) {
         selectCollection(collections[0].id);
     }
+}
+
+async function showDashboard() {
+    currentCollectionId = null;
+
+    // Update Sidebar Active State
+    document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('active'));
+    const dashItem = document.querySelector('.collection-item:first-child');
+    if (dashItem) dashItem.classList.add('active');
+
+    // Update Header
+    const welcomeTitle = document.querySelector('.welcome-title');
+    if (welcomeTitle) welcomeTitle.textContent = 'Overview';
+
+    // Get Recent Items across all collections
+    const collections = await storage.getCollections();
+    let allItems = [];
+    collections.forEach(c => {
+        c.items.forEach(item => {
+            allItems.push({ ...item, collectionId: c.id });
+        });
+    });
+
+    // Sort by timestamp desc
+    allItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    // Render the top 20 items
+    renderItems(allItems.slice(0, 20));
+
+    // Update dashboard stats
+    await updateDashboardStats();
 }
 
 async function selectCollection(id) {
@@ -194,11 +253,14 @@ async function selectCollection(id) {
 
     // Update UI active state
     document.querySelectorAll('.collection-item').forEach(el => el.classList.remove('active'));
-    // Re-render list to update active class (simple way)
-    await loadCollections();
 
     const collection = await storage.getCollection(id);
-    renderItems(collection.items);
+
+    // Update Header
+    const welcomeTitle = document.querySelector('.welcome-title');
+    if (welcomeTitle) welcomeTitle.textContent = collection.name;
+
+    renderItems(collection.items.map(i => ({ ...i, collectionId: id })));
 
     // Enable template button if items exist
     const templateBtn = document.getElementById('template-btn');
@@ -211,16 +273,17 @@ async function selectCollection(id) {
 
 function renderItems(items) {
     const container = document.getElementById('items-container');
+    if (!container) return;
 
-    // Keep the table header, clear only rows
-    const existingRows = container.querySelectorAll('.table-row, .empty-state');
-    existingRows.forEach(row => row.remove());
+    container.innerHTML = '';
 
     if (items.length === 0) {
-        const emptyState = document.createElement('div');
-        emptyState.className = 'empty-state';
-        emptyState.innerHTML = '<p>No items in this collection</p>';
-        container.appendChild(emptyState);
+        container.innerHTML = `
+            <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                <p>No items found. Start collecting everything!</p>
+            </div>
+        `;
         return;
     }
 
@@ -228,310 +291,56 @@ function renderItems(items) {
         const row = document.createElement('div');
         row.className = 'table-row';
         row.dataset.index = index;
+        row.dataset.id = item.id;
 
-        const validation = ValidationManager.validateItem(item);
-        const displayTitle = item.data.title || item.data.name || item.data.content || item.data.raw_text || 'Untitled Item';
+        const displayTitle = item.data.title || item.data.name || item.data.content || 'Untitled Item';
+        const truncatedTitle = displayTitle.length > 60 ? displayTitle.substring(0, 60) + '...' : displayTitle;
 
-        // Truncate title if too long
-        const truncatedTitle = displayTitle.length > 40 ? displayTitle.substring(0, 40) + '...' : displayTitle;
-
-        // Extract domain from URL
-        let sourceDomain = 'Unknown';
+        // Extract domain
+        let sourceDomain = 'Local';
         try {
-            const url = new URL(item.source.url);
-            sourceDomain = url.hostname.replace('www.', '');
-        } catch (e) {
-            sourceDomain = item.source.title || 'Unknown';
-        }
+            if (item.source && item.source.url) {
+                const url = new URL(item.source.url);
+                sourceDomain = url.hostname.replace('www.', '');
+            }
+        } catch (e) { }
 
-        // Determine Label
         const label = item.label || 'Unlabeled';
-        const labelClass = item.label ? `label-${item.label.toLowerCase().replace(/\s+/g, '')}` : '';
+        const labelClass = `label-${label.toLowerCase().replace(/\s+/g, '')}`;
 
-        // Determine Tags
-        let tagsHtml = '';
-        if (item.ai_extracted) {
-            tagsHtml += '<span class="tag-pill purple">AI Extracted</span>';
-        }
-        if (item.type === 'structured') {
-            tagsHtml += '<span class="tag-pill blue">Structured</span>';
-        } else {
-            tagsHtml += '<span class="tag-pill gray">Text</span>';
-        }
-        // Add domain as tag
-        tagsHtml += `<span class="tag-pill gray">${sourceDomain.split('.')[0]}</span>`;
-
-        // Format date
-        const date = new Date(item.timestamp);
-        const formattedDate = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const formattedTime = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-        const dateStr = `${formattedDate}, ${formattedTime}`;
-
-        // Row click handling is now managed via event delegation in setupEventListeners
-
+        const date = new Date(item.timestamp || (item.source && item.source.timestamp));
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
         row.innerHTML = `
-            <div class="col-checkbox"><input type="checkbox" class="item-checkbox" data-id="${item.id}"></div>
-            <div class="col-title">${item.data.title || item.data.name || item.data.content || item.data.raw_text || 'Untitled'}</div>
+            <div class="col-checkbox"><input type="checkbox" class="item-checkbox" data-id="${item.id}" onclick="event.stopPropagation()"></div>
+            <div class="col-title">${truncatedTitle}</div>
             <div class="col-status"><span class="status-badge ${labelClass}">${label}</span></div>
-            <div class="col-tags">${tagsHtml}</div>
+            <div class="col-tags">
+                <span class="tag-pill">${sourceDomain.split('.')[0]}</span>
+                ${item.ai_extracted ? '<span class="tag-pill" style="background: var(--primary-glow); color: var(--primary);">AI</span>' : ''}
+            </div>
             <div class="col-date">${dateStr}</div>
-            <div class="col-actions" style="position: relative;">
+            <div class="col-actions">
                 <button class="action-btn view-btn" title="View Details">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
                 </button>
-                <button class="action-btn more-btn" data-index="${index}" title="More Actions">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="1"></circle>
-                        <circle cx="19" cy="12" r="1"></circle>
-                        <circle cx="5" cy="12" r="1"></circle>
-                    </svg>
-                </button>
-                
-                <!-- Dropdown Menu -->
-                <div class="dropdown-menu" id="dropdown-${index}">
-                    <div style="padding: 4px 12px; font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase;">Set Label</div>
-                    <div class="dropdown-item label-btn" data-index="${index}" data-label="Work">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #1E40AF; display: inline-block;"></span>
-                        Work
-                    </div>
-                    <div class="dropdown-item label-btn" data-index="${index}" data-label="Personal">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #6B21A8; display: inline-block;"></span>
-                        Personal
-                    </div>
-                    <div class="dropdown-item label-btn" data-index="${index}" data-label="Important">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #991B1B; display: inline-block;"></span>
-                        Important
-                    </div>
-                    <div class="dropdown-item label-btn" data-index="${index}" data-label="To Read">
-                        <span style="width: 8px; height: 8px; border-radius: 50%; background: #92400E; display: inline-block;"></span>
-                        To Read
-                    </div>
-                    <div style="height: 1px; background: #E5E7EB; margin: 4px 0;"></div>
-                    <div class="dropdown-item ai-extract-btn" data-item-index="${index}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275z"/>
-                        </svg>
-                        Extract Structure
-                    </div>
-                    <div class="dropdown-item delete delete-btn" data-index="${index}">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="3 6 5 6 21 6"></polyline>
-                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        </svg>
-                        Delete
-                    </div>
-                </div>
             </div>
         `;
 
+        row.onclick = () => openItemDetail(index);
         container.appendChild(row);
     });
-
-    // Event listeners are now handled by delegation in setupEventListeners
 }
 
-async function showItemDetail(item) {
-    const modal = document.getElementById('item-detail-modal');
-    const detailBody = document.getElementById('detail-body');
-
-    // Get the item's index for AI extraction
-    const collection = await storage.getCollection(currentCollectionId);
-    const itemIndex = collection.items.findIndex(i => i.timestamp === item.timestamp && i.source.url === item.source.url);
-
-    // Build AI extracted data section
-    let aiExtractedSection = '';
-    if (item.ai_extracted && item.type === 'structured') {
-        const listFields = ['key_points', 'key_findings', 'action_items', 'decisions', 'topics', 'attendees', 'desired_solution', 'key_concepts', 'definitions'];
-
-        aiExtractedSection = `
-      <div class="detail-section">
-        <h4>AI Extracted Fields</h4>
-        <div class="detail-content" style="background: #faf5ff;">
-          ${Object.entries(item.data).filter(([key]) => key !== 'raw_text' && key !== 'content').map(([key, value]) => {
-            let displayValue = value;
-
-            // Format arrays and list fields as bullet points
-            if (Array.isArray(value)) {
-                displayValue = '<ul style="margin: 4px 0; padding-left: 20px;">' +
-                    value.map(v => `<li>${v}</li>`).join('') + '</ul>';
-            } else if (listFields.includes(key) && typeof value === 'string' && value.includes('•')) {
-                // If it contains bullets, convert to HTML list
-                const points = value.split('•').filter(p => p.trim().length > 0);
-                displayValue = '<ul style="margin: 4px 0; padding-left: 20px;">' +
-                    points.map(p => `<li>${p.trim()}</li>`).join('') + '</ul>';
-            } else if (listFields.includes(key) && typeof value === 'string' && value.length > 100) {
-                // Long string in a list field - try to split and bulletize
-                const points = value.split(/\.\s+(?=[A-Z])|;\s*|\n/).filter(p => p.trim().length > 10);
-                if (points.length > 1) {
-                    displayValue = '<ul style="margin: 4px 0; padding-left: 20px;">' +
-                        points.map(p => `<li>${p.trim()}</li>`).join('') + '</ul>';
-                }
-            }
-
-            return `<div style="margin-bottom: 12px;">
-                <strong style="color: #7c3aed;">${key.replace(/_/g, ' ')}:</strong> 
-                ${displayValue}
-            </div>`;
-        }).join('')}
-        </div>
-      </div>
-    `;
-    }
-
-    // Show original text if available
-    let originalTextSection = '';
-    if (item.data.raw_text) {
-        originalTextSection = `
-      <div class="detail-section">
-        <h4>Original Text</h4>
-        <div class="detail-content" style="background: #f1f5f9; max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">
-          ${item.data.raw_text}
-        </div>
-      </div>
-    `;
-    }
-
-
-
-    // Build validation section
-    const validation = ValidationManager.validateItem(item);
-    let validationSection = '';
-    if (validation.status !== 'valid') {
-        validationSection = `
-      <div class="detail-section">
-        <h4>Validation Issues</h4>
-        <div class="detail-content" style="background: ${validation.status === 'error' ? '#fef2f2' : '#fffbeb'};">
-          ${validation.issues.map(issue => `<div>⚠️ ${issue}</div>`).join('')}
-        </div>
-      </div>
-    `;
-    }
-
-    // Optional AI extraction button for non-extracted items
-    let aiExtractionButton = '';
-    if (!item.ai_extracted && item.data.content && item.data.content.split(/\s+/).length > 50) {
-        aiExtractionButton = `
-      <button id="extract-ai-btn" data-item-index="${itemIndex}" style="
-        margin-top: 16px;
-        padding: 10px 16px;
-        border: 1px solid #c084fc;
-        background: #faf5ff;
-        color: #7c3aed;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: all 0.15s;
-      ">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 6px;">
-          <path d="M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 0-1.275-1.275L3 12l5.813-1.912a2 2 0 0 0 1.275-1.275z"/>
-        </svg>
-        Extract Structure with AI (Optional)
-      </button>
-    `;
-    }
-
-    detailBody.innerHTML = `
-    ${aiExtractedSection}
-    
-    ${originalTextSection}
-    
-    ${!item.ai_extracted ? `
-    <div class="detail-section">
-      <h4>Content</h4>
-      <div class="detail-content" style="max-height: 400px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">${item.data.content || 'No content'}</div>
-      ${aiExtractionButton}
-    </div>
-    ` : ''}
-    
-    <div class="detail-section">
-      <h4>Source</h4>
-      <div class="detail-meta">
-        <div class="detail-meta-item">
-          <strong>Page Title</strong>
-          ${item.source.title}
-        </div>
-        <div class="detail-meta-item">
-          <strong>URL</strong>
-          <a href="${item.source.url}" target="_blank" style="color: #2563eb; text-decoration: none;">${item.source.url}</a>
-        </div>
-        <div class="detail-meta-item">
-          <strong>Saved On</strong>
-          ${new Date(item.source.timestamp).toLocaleString()}
-        </div>
-        <div class="detail-meta-item">
-          <strong>Type</strong>
-          ${item.type}
-        </div>
-      </div>
-    </div>
-    
-    ${validationSection}
-  `;
-
-    modal.classList.remove('hidden');
-
-    // Populate collection move dropdown
-    const moveSelect = document.getElementById('move-to-collection-select');
-    const moveBtn = document.getElementById('move-item-btn');
-    const allCollections = await storage.getCollections();
-
-    // Clear existing options (except first)
-    moveSelect.innerHTML = '<option value="">Move to...</option>';
-
-    // Add all collections except the current one
-    allCollections.forEach(coll => {
-        if (coll.id !== currentCollectionId) {
-            const option = document.createElement('option');
-            option.value = coll.id;
-            option.textContent = coll.name;
-            moveSelect.appendChild(option);
+// Item Detail View - Open in new tab
+function openItemDetail(index) {
+    getCurrentItems().then(items => {
+        const item = items[index];
+        if (item) {
+            const url = chrome.runtime.getURL(`item-view.html?id=${item.id}&collectionId=${item.collectionId || currentCollectionId}`);
+            chrome.tabs.create({ url });
         }
     });
-
-    // Show/hide move button based on selection
-    moveSelect.onchange = () => {
-        moveBtn.style.display = moveSelect.value ? 'block' : 'none';
-    };
-
-    // Handle move button click
-    moveBtn.onclick = async () => {
-        const targetCollectionId = moveSelect.value;
-        if (!targetCollectionId) return;
-
-        try {
-            await storage.moveItemToCollection(item.id, currentCollectionId, targetCollectionId);
-            modal.classList.add('hidden');
-            // Refresh the collection view
-            await loadCollectionItems(currentCollectionId);
-            alert('Item moved successfully!');
-        } catch (error) {
-            console.error('Error moving item:', error);
-            alert('Failed to move item: ' + error.message);
-        }
-    };
-
-    document.getElementById('close-detail-btn').onclick = () => {
-        modal.classList.add('hidden');
-    };
-
-    // Handle AI extraction if button exists
-    const extractBtn = document.getElementById('extract-ai-btn');
-    if (extractBtn) {
-        extractBtn.onmouseover = () => {
-            extractBtn.style.background = '#f3e8ff';
-            extractBtn.style.borderColor = '#a855f7';
-        };
-        extractBtn.onmouseout = () => {
-            extractBtn.style.background = '#faf5ff';
-            extractBtn.style.borderColor = '#c084fc';
-        };
-        extractBtn.onclick = async () => {
-            modal.classList.add('hidden');
-            await showExtractionModal(item, itemIndex);
-        };
-    }
 }
 
 // Helper function to determine if item should show AI extraction button
@@ -614,7 +423,7 @@ function setupEventListeners() {
                 console.log('Index:', index, 'Label:', label);
 
                 // Close dropdown
-                const dropdown = document.getElementById(`dropdown-${index}`);
+                const dropdown = document.getElementById(`dropdown - ${index} `);
                 console.log('Dropdown found:', dropdown);
                 if (dropdown) dropdown.classList.remove('visible');
 
@@ -649,7 +458,7 @@ function setupEventListeners() {
                 const index = parseInt(aiExtractBtn.dataset.itemIndex);
 
                 // Close dropdown
-                const dropdown = document.getElementById(`dropdown-${index}`);
+                const dropdown = document.getElementById(`dropdown - ${index} `);
                 if (dropdown) dropdown.classList.remove('visible');
 
                 const collection = await storage.getCollection(currentCollectionId);
@@ -680,13 +489,13 @@ function setupEventListeners() {
 
                 // Close all other dropdowns
                 document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                    if (menu.id !== `dropdown-${index}`) {
+                    if (menu.id !== `dropdown - ${index} `) {
                         menu.classList.remove('visible');
                     }
                 });
 
                 // Toggle current
-                const dropdown = document.getElementById(`dropdown-${index}`);
+                const dropdown = document.getElementById(`dropdown - ${index} `);
                 if (dropdown) {
                     dropdown.classList.toggle('visible');
                 }
@@ -702,13 +511,13 @@ function setupEventListeners() {
 
                 // Close all other dropdowns
                 document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                    if (menu.id !== `dropdown-${index}`) {
+                    if (menu.id !== `dropdown - ${index} `) {
                         menu.classList.remove('visible');
                     }
                 });
 
                 // Toggle current
-                const dropdown = document.getElementById(`dropdown-${index}`);
+                const dropdown = document.getElementById(`dropdown - ${index} `);
                 if (dropdown) {
                     dropdown.classList.toggle('visible');
                 }
@@ -729,28 +538,23 @@ function setupEventListeners() {
                 e.stopPropagation();
                 index = parseInt(viewBtn.closest('.table-row').dataset.index);
             } else if (titleCol) {
-                // Title click
                 index = parseInt(titleCol.closest('.table-row').dataset.index);
             }
 
             if (index !== -1 && !isNaN(index)) {
-                const collection = await storage.getCollection(currentCollectionId);
-                if (collection && collection.items[index]) {
-                    const item = collection.items[index];
-                    // Navigate to item-view.html for full editing capabilities
-                    window.location.href = `item-view.html?collectionId=${currentCollectionId}&id=${item.id}`;
-                }
+                openItemDetail(index);
             }
         });
     }
 
     // Auth Event Listeners
-    const loggedOutBtn = document.getElementById('user-logged-out');
-    if (loggedOutBtn && window.AuthManager) {
-        loggedOutBtn.addEventListener('click', async () => {
-            console.log('Sign in clicked');
+    const signInBtn = document.getElementById('sign-in-btn');
+    if (signInBtn && authManager) {
+        signInBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            console.log('Emergency Sign in clicked');
             try {
-                await window.AuthManager.login();
+                await authManager.login();
                 showToast('Signed in successfully!');
             } catch (error) {
                 console.error('Login failed', error);
@@ -759,11 +563,12 @@ function setupEventListeners() {
         });
     }
 
-    const logoutBtn = document.getElementById('logout-btn');
-    if (logoutBtn && window.AuthManager) {
-        logoutBtn.addEventListener('click', async (e) => {
+    const signOutBtn = document.getElementById('sign-out-btn') || document.getElementById('logout-btn');
+    if (signOutBtn && authManager) {
+        signOutBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
             e.stopPropagation();
-            await window.AuthManager.logout();
+            await authManager.logout();
             showToast('Signed out');
         });
     }
@@ -866,7 +671,7 @@ function setupEventListeners() {
                 select.appendChild(option);
             });
 
-            row.innerHTML = `<span style="font-weight:500">${target}</span>`;
+            row.innerHTML = `<span style = "font-weight:500" > ${target}</span > `;
             row.appendChild(select);
             mappingContainer.appendChild(row);
         });
@@ -1138,3 +943,21 @@ function setupEventListeners() {
     };
 }
 
+
+
+async function getCurrentItems() {
+    if (currentCollectionId) {
+        const collection = await storage.getCollection(currentCollectionId);
+        return collection.items;
+    } else {
+        const collections = await storage.getCollections();
+        let allItems = [];
+        collections.forEach(c => {
+            c.items.forEach(item => {
+                allItems.push({ ...item, collectionId: c.id });
+            });
+        });
+        allItems.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        return allItems.slice(0, 20);
+    }
+}

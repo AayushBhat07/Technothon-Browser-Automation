@@ -48,7 +48,7 @@ class AIManager {
         }
 
         const temperature = options.temperature || 0.1; // Low temperature for structured extraction
-        const maxTokens = options.maxTokens || 1024;
+        const maxTokens = options.maxTokens || 4096; // Increased from 1024 for complex extractions
 
         const requestBody = {
             contents: [{
@@ -127,6 +127,7 @@ Instructions:
 - Extract the most relevant structured fields based on the content type
 - For contacts: name, company, email, phone, location, title, website
 - For articles/content: title, author, main_topic, key_points (array), summary, source, date
+- For forum threads/discussions: title, author, date/timestamp, replies_count, link, synopsis
 - For meetings: date, attendees (array), topics (array), action_items (array), decisions (array)
 - For any other type: extract the most relevant fields you identify
 
@@ -226,7 +227,10 @@ Context Text (from webpage):
 Instructions:
 1. Analyze the text to find data matching the User Query.
 2. **IMPORTANT: Prioritize data that appears LATER in the text (chronologically more recent).**
-3. **FORMATTING RULE:**
+3. **DEEP EXTRACTION:**
+   - When extracting "Threads", "Articles", or "Posts", capture available details like **Author, Points/Votes/Replies, Date**.
+   - **WHOLE ARTICLE REQUEST:** If the user specifically asks for the "Whole Article" or "Full Content", do NOT summarize. Capture the entire relevant body text of the article/post as a single field called 'full_content', preserving all paragraphs.
+4. **FORMATTING RULE:**
    - If the user asks for **Data Extraction/Table/List** (e.g., "extract names", "get all emails", "in table form", "find contacts"), return a JSON ARRAY of objects where each object represents one item.
    - If the user asks for a **Summary/Explanation** (e.g., "summarize", "what is the problem", "explain"), return a JSON ARRAY with a **SINGLE OBJECT**.
      - **CRITICAL:** Combine ALL relevant sections (Problem, Solution, Context, Bonus Points) into a **SINGLE STRING** value within that object.
@@ -241,19 +245,20 @@ Example Output (List):
 [{"Feature": "Save"}, {"Feature": "Export"}]
 
 Example Output (Summary):
-[{"Problem Statement": "The problem is X.\n\nDesired Solution:\nThe solution should be Y.\n\nBonus Points:\n- Point A\n- Point B"}]`;
+[{"Problem Statement": "The problem is X.\\n\\nDesired Solution:\\nThe solution should be Y.\\n\\nBonus Points:\\n- Point A\\n- Point B"}]`;
 
         try {
-            const response = await this.callGoogleAI(prompt, { temperature: 0.1 });
+            const response = await this.callGoogleAI(prompt, {
+                temperature: 0.1,
+                maxTokens: 4096 // Ensure we have enough room for large extractions
+            });
 
             console.log('Raw AI Extraction Response:', response);
 
-            let jsonString = response.trim();
-            // Clean markdown
-            if (jsonString.startsWith('```json')) {
-                jsonString = jsonString.replace(/^```json\n/, '').replace(/\n```$/, '');
-            } else if (jsonString.startsWith('```')) {
-                jsonString = jsonString.replace(/^```\n/, '').replace(/\n```$/, '');
+            const jsonString = this.extractJSON(response);
+            if (!jsonString) {
+                console.error('Could not find JSON in AI response:', response);
+                throw new Error('Failed to find structure in AI response.');
             }
 
             try {
@@ -271,12 +276,55 @@ Example Output (Summary):
                 return data;
             } catch (parseError) {
                 console.error('JSON Parse Error:', parseError);
+                // Log snippet of failing JSON for debugging
+                console.error('Failing JSON snippet:', jsonString.substring(0, 200) + '...');
                 throw new Error('Failed to parse AI response.');
             }
         } catch (error) {
             console.error('AI Extraction Error:', error);
             throw error;
         }
+    }
+
+    /**
+     * Robustly extracts JSON block from text
+     * @param {string} text - Text containing JSON
+     * @returns {string|null} - Extracted JSON string or null
+     */
+    extractJSON(text) {
+        if (!text) return null;
+
+        let cleaned = text.trim();
+
+        // 1. Precise Match: Look for markdown blocks
+        const mdMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/) || cleaned.match(/```\s*([\s\S]*?)\s*```/);
+        if (mdMatch) {
+            return mdMatch[1].trim();
+        }
+
+        // 2. Greedy Search: Look for the first/last bracket/brace
+        const firstBracket = cleaned.indexOf('[');
+        const firstBrace = cleaned.indexOf('{');
+
+        let start = -1;
+        let endChar = '';
+
+        if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+            start = firstBracket;
+            endChar = ']';
+        } else if (firstBrace !== -1) {
+            start = firstBrace;
+            endChar = '}';
+        }
+
+        if (start !== -1) {
+            const lastEndChar = cleaned.lastIndexOf(endChar);
+            if (lastEndChar > start) {
+                return cleaned.substring(start, lastEndChar + 1);
+            }
+        }
+
+        return cleaned;
     }
 
     /**
@@ -354,20 +402,45 @@ Example Output (Summary):
      * @param {string} query - User query
      * @returns {Promise<Array<Object>>} Final verified data
      */
-    async extractAndVerify(text, query) {
-        console.log('[AI Manager] Starting Step 1: Extraction...');
-        const extractedData = await this.extractData(text, query);
+    async transformCollection(items, instruction) {
+        const itemContext = items.map((item, index) => {
+            const data = item.data || {};
+            const source = item.source || {};
+            return `Item ${index + 1}:
+Title: ${item.title || source.title || 'Untitled'}
+URL: ${source.url || 'N/A'}
+Data: ${JSON.stringify(data)}
+---`;
+        }).join('\n\n');
 
-        // Optimization: Only verify if text is large enough (> 15k chars)
-        // Small pages don't usually need verification and it saves time/cost
-        if (text.length > 15000) {
-            console.log(`[AI Manager] Text length (${text.length}) exceeds threshold. Starting Step 2: Verification...`);
-            const verifiedData = await this.verifyExtractedData(text, extractedData, query);
-            console.log(`[AI Manager] Verification complete. Final count: ${verifiedData.length} items.`);
-            return verifiedData;
-        } else {
-            console.log(`[AI Manager] Text length (${text.length}) below threshold. Skipping verification step.`);
-            return extractedData;
+        const prompt = `You are an expert data analyst and editor.
+        
+User Instruction: "${instruction}"
+
+Background Context:
+The user has collected several items in a "Smart Collector" extension. You need to process these items based on their instruction.
+
+Collected Items:
+${itemContext}
+
+Instructions:
+1. Carefully follow the User Instruction to transform, summarize, or reformat the data.
+2. If the user asks for a table, use Markdown table formatting.
+3. If the user asks for a summary, be professional and structured.
+4. If the user asks to "clean" or "reformat" JSON, provide the improved JSON.
+5. Your output will be rendered directly on a "Paper" styled notebook page. Use clean Markdown.
+6. **Focus ONLY on the content.** Do not add conversational filler unless necessary for the transformation results.
+
+Your Transformation Result:`;
+
+        try {
+            return await this.callGoogleAI(prompt, {
+                temperature: 0.2, // Slightly higher for creative transformations
+                maxTokens: 4096
+            });
+        } catch (error) {
+            console.error('AI Transformation Error:', error);
+            throw error;
         }
     }
 }

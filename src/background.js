@@ -147,6 +147,13 @@ import { aiManager } from './modules/ai.js';
 
 // Magic Bar Message Handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'checkFilePermission') {
+        chrome.extension.isAllowedFileSchemeAccess((isAllowed) => {
+            sendResponse({ isAllowed });
+        });
+        return true;
+    }
+
     if (request.action === 'aiExtract') {
         aiManager.extractAndVerify(request.text, request.query)
             .then(data => sendResponse({ success: true, data: data }))
@@ -154,24 +161,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Async response
     }
 
+    if (request.action === 'getCollections') {
+        storage.getCollections()
+            .then(collections => sendResponse({ success: true, collections }))
+            .catch(error => sendResponse({ success: false, error: error.message }));
+        return true;
+    }
+
     if (request.action === 'saveExtractedData') {
-        handleSaveExtractedData(request);
+        handleSaveExtractedData(request)
+            .then(() => sendResponse({ success: true }))
+            .catch(error => sendResponse({ success: false, error: error.message }));
+        return true;
     }
 });
 
 async function handleSaveExtractedData(request) {
     try {
-        // Create a new collection for this extraction or add to "AI Extractions"
-        const collectionName = "AI Extractions";
-        let collections = await storage.getCollections();
-        let targetCollection = collections.find(c => c.name === collectionName);
+        let targetCollection = null;
 
-        if (!targetCollection) {
+        // If a specific collectionId is provided, use it.
+        if (request.collectionId) {
+            targetCollection = await storage.getCollection(request.collectionId);
+        } else if (request.newCollectionName) {
+            // Create a new collection on the fly
             const newId = await storage.saveCollection({
-                name: collectionName,
+                name: request.newCollectionName,
                 items: []
             });
             targetCollection = await storage.getCollection(newId);
+        }
+
+        // Fallback or default to "AI Extractions"
+        if (!targetCollection) {
+            const collectionName = "AI Extractions";
+            let collections = await storage.getCollections();
+            targetCollection = collections.find(c => c.name === collectionName);
+
+            if (!targetCollection) {
+                const newId = await storage.saveCollection({
+                    name: collectionName,
+                    items: []
+                });
+                targetCollection = await storage.getCollection(newId);
+            }
         }
 
         // Format the data for better display

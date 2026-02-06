@@ -32,6 +32,10 @@ class AuthManager {
         return new Promise((resolve, reject) => {
             chrome.identity.getAuthToken({ interactive }, (token) => {
                 if (chrome.runtime.lastError) {
+                    console.error('Auth Error Details:', chrome.runtime.lastError.message);
+                    if (chrome.runtime.lastError.message.includes('Client ID')) {
+                        console.warn('CRITICAL: Client ID mismatch. The Extension ID has changed. You must add a fixed "key" to manifest.json to match your Google Cloud Console setup.');
+                    }
                     reject(chrome.runtime.lastError);
                 } else {
                     resolve(token);
@@ -134,5 +138,7 @@ class AuthManager {
 }
 
 // Export singleton
+// Export singleton
 const authManager = new AuthManager();
 window.AuthManager = authManager;
+export { authManager };

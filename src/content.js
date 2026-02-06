@@ -53,7 +53,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Will respond asynchronously
     }
 
-    return true; // Important: indicates we will send response asynchronously
+    // Do not return true unconditionally, otherwise other listeners (like Magic Bar) cannot respond
+    // return true; 
 });
 
 function showCollectionPicker(suggested, type, existingCollections = []) {

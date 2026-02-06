@@ -11,15 +11,17 @@
     "notifications",
     "identity"
   ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0JG8SF5kM1HapxQp8qhHTMiTvDpeP3qEPuTMEn8bkCehj/Qt63V4tkrVPdkVahVowcwA6JhqVIqRDqqm+/+0P91XI+GDkUmOKW12Bh8BLRXHTpJcv8QpYlGu/a/SsYVGC9yRaq6nWKDLu+zcO6yHn3iHdjXyEtXOfetoZGdxd0BkKGA4FhHZIEpBKCUw3im/ri2EavjIZyxUwa73g/nXdmH0tTLsjr3mzktSIjrCoOTP1udjvgaQ7RQAJXpkxrlDNb68SyM7B0QdmnPkDkw9HtpnlTLHOU7+ZIo8SCNEMVqhF8OYOoW8C25q4p7BsAGe/7nGLF/7vLVl0uX15QGpvwIDAQAB",
   "oauth2": {
-    "client_id": "746562803104-cdp9jr2ur14t1ibe18828tap05pca42m.apps.googleusercontent.com",
+    "client_id": "746562803104-gnmu4ieq4e60gbo647gvsrpgnjm7lt46.apps.googleusercontent.com",
     "scopes": [
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile"
     ]
   },
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "file:///*"
   ],
   "optional_permissions": [
     "https://sheets.googleapis.com/*"
@@ -34,8 +36,8 @@
         "<all_urls>"
       ],
       "js": [
-        "content.js",
-        "content-magic-bar.js"
+        "magic.js",
+        "content.js"
       ]
     }
   ],
@@ -54,6 +56,17 @@
       "description": "Toggle Magic Extract Bar"
     }
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "lib/pdf.min.js",
+        "lib/pdf.worker.min.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "icons": {
     "16": "assets/icons/icon16.png",
     "48": "assets/icons/icon48.png",
