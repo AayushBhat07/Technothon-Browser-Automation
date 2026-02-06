@@ -42,11 +42,10 @@ A Chrome Extension for intelligent web data collection, enrichment, and export.
 3. Map your data fields to standard columns (auto-mapping attempts to help)
 4. Click **Export** to download CSV
 
-## Features
-
 - ✅ Web data collection via context menu
 - ✅ Collection management (create, view, delete)
-- ✅ Data enrichment (mock API for demo)
+- ✅ AI Magic Bar for natural language extraction
+- ✅ Data enrichment
 - ✅ Data validation (email, phone, etc.)
 - ✅ Smart column mapping
 - ✅ Template-based document generation
@@ -68,19 +67,19 @@ A Chrome Extension for intelligent web data collection, enrichment, and export.
 ### Project Structure
 ```
 smart-web-collector/
-├── manifest.json          # Extension configuration
-├── background.js          # Service worker (context menus)
-├── content.js             # Content script (selection capture)
-├── popup.html/js/css      # Popup interface
-├── sidepanel.html/js/css  # Main side panel UI
-├── modules/
-│   ├── storage.js         # IndexedDB wrapper
-│   ├── enrichment.js      # Data enrichment
-│   ├── validation.js      # Data validation
-│   ├── mapping.js         # Column mapping
-│   ├── templates.js       # Template generation
-│   └── export.js          # Export utilities
-└── assets/icons/          # Extension icons
+├── public/                # Static assets & Manifest
+│   ├── manifest.json      # Extension configuration
+│   └── icons/             # Extension icons
+├── src/                   # Source code
+│   ├── background.js      # Service worker
+│   ├── content.js         # Content script
+│   ├── content-magic-bar.js # Magic Bar UI
+│   ├── sidepanel.js       # Side panel logic
+│   └── modules/           # Core library modules
+│       ├── storage.js     # IndexedDB wrapper
+│       ├── ai.js          # Gemini AI integration
+│       └── export.js      # Export utilities
+└── lib/                   # External libraries
 ```
 
 ### Tech Stack

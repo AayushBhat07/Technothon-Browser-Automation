@@ -3,154 +3,6 @@
  * Injects a floating input bar for AI-powered data extraction.
  */
 
-// PDF Extractor - uses global pdfjsLib loaded via manifest
-class PDFExtractor {
-    constructor() {
-        this.isLoaded = false;
-        this.pdfjsLib = null;
-    }
-
-    init() {
-        if (this.isLoaded) return;
-
-        try {
-            // pdfjsLib should be available globally from manifest content_scripts
-            if (typeof window.pdfjsLib !== 'undefined') {
-                this.pdfjsLib = window.pdfjsLib;
-                // Set the worker source to the local file in the extension
-                this.pdfjsLib.GlobalWorkerOptions.workerSrc = chrome.runtime.getURL('lib/pdf.worker.min.js');
-                this.isLoaded = true;
-                console.log('[PDF Extractor] pdfjsLib initialized from global scope');
-            } else {
-                console.error('[PDF Extractor] pdfjsLib not found in global scope');
-            }
-        } catch (error) {
-            console.error('[PDF Extractor] Initialization failed:', error);
-        }
-    }
-
-    isPDFPage() {
-        const url = window.location.href;
-        return url.toLowerCase().endsWith('.pdf') ||
-            document.querySelector('embed[type="application/pdf"]') !== null;
-    }
-
-    async checkFilePermission() {
-        return new Promise((resolve) => {
-            chrome.runtime.sendMessage({ action: 'checkFilePermission' }, (response) => {
-                resolve(response && response.isAllowed);
-            });
-        });
-    }
-
-    async extractTextFromCurrentPDF(onProgress) {
-        this.init();
-
-        if (!this.isLoaded) {
-            throw new Error('PDF extractor library not loaded. Please reload the extension.');
-        }
-
-        const pdfUrl = this.getPDFUrl();
-        if (!pdfUrl) {
-            throw new Error('Could not find PDF URL');
-        }
-
-        // Proactive check for local files
-        if (pdfUrl.startsWith('file://')) {
-            const isAllowed = await this.checkFilePermission();
-            if (!isAllowed) {
-                throw new Error('FILE_PERMISSION_MISSING');
-            }
-        }
-
-        try {
-            console.log('[PDF Extractor] Loading PDF as ArrayBuffer via XHR:', pdfUrl);
-
-            // XMLHttpRequest is often more reliable than fetch for file:// URLs in extensions
-            const uint8Array = await new Promise((resolve, reject) => {
-                const xhr = new XMLHttpRequest();
-                xhr.open('GET', pdfUrl, true);
-                xhr.responseType = 'arraybuffer';
-
-                xhr.onload = () => {
-                    if (xhr.status === 200 || (pdfUrl.startsWith('file://') && xhr.status === 0)) {
-                        if (xhr.response) {
-                            resolve(new Uint8Array(xhr.response));
-                        } else {
-                            reject(new Error('Empty response received from local file'));
-                        }
-                    } else {
-                        reject(new Error(`XHR failed with status ${xhr.status}`));
-                    }
-                };
-
-                xhr.onerror = () => {
-                    reject(new Error('Network/Access error (XHR failed). Ensure local file permission is enabled.'));
-                };
-
-                xhr.send();
-            });
-
-            console.log('[PDF Extractor] Starting PDF.js extraction with', uint8Array.length, 'bytes');
-
-            // Pass the data directly instead of the URL
-            const loadingTask = this.pdfjsLib.getDocument({ data: uint8Array });
-            const pdf = await loadingTask.promise;
-            console.log('[PDF Extractor] PDF loaded successfully, pages:', pdf.numPages);
-
-            let fullText = '';
-            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-                const page = await pdf.getPage(pageNum);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str).join(' ');
-                fullText += pageText + '\n\n';
-
-                if (onProgress) {
-                    onProgress(pageNum, pdf.numPages);
-                }
-            }
-
-            console.log('[PDF Extractor] Extraction complete:', fullText.length, 'characters');
-            return fullText;
-        } catch (error) {
-            console.error('[PDF Extractor] Extraction failed:', error);
-
-            if (error.message === 'FILE_PERMISSION_MISSING') {
-                throw error;
-            }
-
-            // Special handling for local file access denials
-            if (pdfUrl.startsWith('file://')) {
-                throw new Error(
-                    `Access Denied to local PDF.\n\n` +
-                    `PERMISSION STATUS: Your browser is blocking direct file access.\n\n` +
-                    `FIX:\n` +
-                    `1. Go to chrome://extensions\n` +
-                    `2. Find Smart Web Collector -> Details\n` +
-                    `3. Ensure "Allow access to file URLs" is TOGGLED ON.\n` +
-                    `4. RESTART CHROME (sometimes required for file permissions to take effect).\n` +
-                    `5. Refresh this page.`
-                );
-            }
-            throw error;
-        }
-    }
-
-    getPDFUrl() {
-        if (window.location.href.endsWith('.pdf')) return window.location.href;
-
-        const embed = document.querySelector('embed[type="application/pdf"]');
-        if (embed && embed.src) return embed.src;
-
-        const object = document.querySelector('object[type="application/pdf"]');
-        if (object && object.data) return object.data;
-
-        return null;
-    }
-}
-
-const pdfExtractor = new PDFExtractor();
-
 console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TESTING IIFE EXECUTION...');
 
 (function () {
@@ -424,41 +276,6 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                     box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
                 }
 
-                .permission-banner {
-                    background: #FEF2F2;
-                    border: 1px solid #FCA5A5;
-                    border-radius: 8px;
-                    padding: 12px;
-                    display: none;
-                    flex-direction: column;
-                    gap: 8px;
-                }
-
-                .permission-banner.active {
-                    display: flex;
-                }
-
-                .permission-banner h4 {
-                    margin: 0;
-                    color: #991B1B;
-                    font-size: 14px;
-                    font-weight: 600;
-                }
-
-                .permission-banner p {
-                    margin: 0;
-                    color: #7F1D1D;
-                    font-size: 13px;
-                    line-height: 1.4;
-                }
-
-                .permission-banner .steps {
-                    margin: 4px 0;
-                    padding-left: 20px;
-                    color: #B91C1C;
-                    font-size: 12px;
-                }
-
                 .hidden {
                     display: none !important;
                 }
@@ -483,25 +300,13 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                     <span>Analyzing page content...</span>
                 </div>
 
-                <div class="permission-banner" id="permission-banner">
-                    <h4>Local File Access Required</h4>
-                    <p>Chrome blocks extension access to local PDFs by default. To enable automatic extraction:</p>
-                    <ol class="steps">
-                        <li>Go to <b>chrome://extensions</b></li>
-                        <li>Find <b>Smart Web Collector</b> &rarr; <b>Details</b></li>
-                        <li>Toggle <b>ON</b> "Allow access to file URLs"</li>
-                        <li>Refresh this page</li>
-                    </ol>
-                    <button class="secondary-btn" style="align-self: flex-start; margin-top: 4px;" id="refresh-instruction-btn">I've enabled it, refresh page</button>
-                </div>
-
                 <div class="paste-area hidden">
                     <div style="padding: 12px; background: #FEF3C7; border-radius: 6px; margin-bottom: 12px;">
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#92400E" stroke-width="2">
                                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                             </svg>
-                            <span style="font-size: 13px; font-weight: 500; color: #92400E;">PDF/Document Detected</span>
+                            <span style="font-size: 13px; font-weight: 500; color: #92400E;">Document Detected</span>
                         </div>
                         <p style="font-size: 12px; color: #78350F; margin: 0;">Copy the text you want to extract, then paste it below:</p>
                     </div>
@@ -549,13 +354,7 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             });
 
             wrapper.querySelector('#copy-btn').addEventListener('click', () => this.copyResults());
-            this.saveBtn.addEventListener('click', () => this.saveResults());
             this.saveNewBtn.addEventListener('click', () => this.saveToNewCollection());
-
-            const refreshBtn = wrapper.querySelector('#refresh-instruction-btn');
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', () => window.location.reload());
-            }
 
             // Close when clicking outside
             document.addEventListener('mousedown', (e) => {
@@ -608,19 +407,8 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
         hide() {
             this.isVisible = false;
             const container = this.shadowRoot.querySelector('.magic-bar-container');
-            container.classList.remove('visible');
-            // Reset permission banner when hiding
-            const banner = this.shadowRoot.querySelector('#permission-banner');
-            if (banner) banner.classList.remove('active');
-        }
-
-        showPermissionBanner() {
-            const banner = this.shadowRoot.querySelector('#permission-banner');
-            if (banner) {
-                banner.classList.add('active');
-                this.resultsArea.classList.remove('has-results');
-                this.footerActions.classList.remove('visible');
-                this.loadingIndicator.classList.remove('active');
+            if (container) {
+                container.classList.remove('visible');
             }
         }
 
@@ -644,53 +432,6 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                 pageText = selectedText.substring(0, 100000);
                 source = 'selected text';
                 console.log('[SmartCollector] Using selected text:', pageText.length, 'characters');
-            } else if (pdfExtractor.isPDFPage()) {
-                // Priority 2: Automatic PDF extraction
-                try {
-                    this.setLoading(true, false);
-                    const loadingSpan = this.loadingIndicator.querySelector('span');
-                    loadingSpan.textContent = 'Extracting PDF content...';
-                    console.log('[SmartCollector] PDF detected, extracting text automatically...');
-
-                    pageText = await pdfExtractor.extractTextFromCurrentPDF((current, total) => {
-                        // Update progress
-                        loadingSpan.textContent = `Extracting PDF: page ${current}/${total}...`;
-                    });
-
-                    if (!pageText) {
-                        throw new Error('No text content could be extracted from this PDF.');
-                    }
-
-                    source = 'PDF extraction';
-
-                    // Reset loading text
-                    loadingSpan.textContent = 'Analyzing page content...';
-                    console.log('[SmartCollector] PDF extraction complete:', pageText.length, 'characters');
-                } catch (error) {
-                    console.error('[SmartCollector] PDF extraction failed:', error);
-                    this.setLoading(false); // ALWAYS reset loading on error
-
-                    if (error.message === 'FILE_PERMISSION_MISSING') {
-                        this.showPermissionBanner();
-                        return;
-                    }
-
-                    // Fallback to paste mode on PDF extraction failure
-                    if (pasteArea && pasteArea.classList.contains('hidden')) {
-                        pasteArea.classList.remove('hidden');
-                        pasteInput.focus();
-                        alert(
-                            'PDF Extraction Failed\n\n' +
-                            'Error: ' + error.message + '\n\n' +
-                            'Chrome\'s PDF viewer has security restrictions that prevent automatic extraction.\n\n' +
-                            'Workaround: Please copy the text from the PDF and paste it below.'
-                        );
-                        this.setLoading(false); // Reset loading if user cancels or we show fallback
-                        return;
-                    }
-                    this.setLoading(false); // Reset loading if we returned early
-                    return;
-                }
             } else if (pastedText.length > 10) {
                 // Priority 3: User pasted text (for non-PDF documents)
                 pageText = pastedText.substring(0, 100000);

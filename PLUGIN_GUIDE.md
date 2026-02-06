@@ -21,7 +21,6 @@ The Smart Web Collector is a Chrome Extension (Manifest V3) designed to transfor
 | :--- | :--- |
 | **Context Menu Save** | Right-click any selection to save it to a specific collection. |
 | **AI Magic Bar** | Command-Shift-E (Mac) or Ctrl-Shift-E (Win) to open a bar that extracts data via natural language. |
-| **PDF Extraction** | Automatic text extraction from local and web PDFs using PDF.js. |
 | **Collection Manager** | Organizes items into custom folders (Collections). |
 | **AI Enrichment** | Automatically structures messy text into JSON-like objects (Name, Email, Price, etc.). |
 | **Smart Mapping** | Maps extracted fields to standard columns for clean exports. |
@@ -33,7 +32,7 @@ The Smart Web Collector is a Chrome Extension (Manifest V3) designed to transfor
 
 ## 🏗 Implementation Details (The Internal Hub)
 
-The project is built with **Vanilla JavaScript (ES6)** for maximum performance and zero dependency bloat (except for PDF.js).
+The project is built with **Vanilla JavaScript (ES6)** for maximum performance.
 
 -   **Manifest V3**: Compliant with the latest Chrome standards using Service Workers.
 -   **Shadow DOM**: The Magic Bar is injected into pages via a Shadow Root to prevent style leaks or conflicts with host websites.
