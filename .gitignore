@@ -28,3 +28,4 @@ Thumbs.db
 
 # User data (don't commit user's collected data or API keys)
 # Note: structure is committed, not user data storage
+set-api-key.js
