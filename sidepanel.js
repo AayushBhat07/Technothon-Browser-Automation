@@ -6,8 +6,7 @@ import { MappingManager } from './modules/mapping.js';
 import { TemplateManager } from './modules/templates.js';
 import { aiManager } from './modules/ai.js';
 
-import { authManager } from './modules/auth.js';
-
+// Auth disabled: module not present
 let currentCollectionId = null;
 let currentExtractionItem = null;
 
@@ -15,8 +14,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize Storage
     await storage.open();
 
-    // Initialize Theme
-    const savedTheme = localStorage.getItem('sidepanel-theme') || 'theme-modern';
+    // Force Minimalist Theme for redesign
+    localStorage.setItem('sidepanel-theme', 'theme-minimalist');
+    const savedTheme = 'theme-minimalist';
     document.body.className = savedTheme;
     const themeSelect = document.getElementById('theme-select');
     if (themeSelect) {
@@ -26,15 +26,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.body.className = newTheme;
             localStorage.setItem('sidepanel-theme', newTheme);
         });
-    }
-
-    // Initialize Auth directly
-    try {
-        await authManager.init();
-        // Subscribe to Auth Changes
-        authManager.subscribe(updateUserProfileUI);
-    } catch (error) {
-        console.error('AuthManager initialization failed:', error);
     }
 
     // Load initial data
@@ -53,33 +44,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupEventListeners();
 });
 
-// Auth UI Handling
-function updateUserProfileUI(user) {
-    const loggedInView = document.getElementById('user-logged-in');
-    const loggedOutView = document.getElementById('user-logged-out');
-    const userAvatar = document.getElementById('user-avatar');
-    const userName = document.getElementById('user-name');
 
-    if (user) {
-        // User is signed in
-        loggedInView.style.display = 'flex';
-        loggedOutView.style.display = 'none';
-
-        if (userAvatar) userAvatar.src = user.picture || '';
-        if (userName) userName.textContent = user.name || user.email || 'User';
-
-        const welcomeName = document.getElementById('user-name-welcome');
-        if (welcomeName && user.name) {
-            welcomeName.textContent = user.name.split(' ')[0];
-        } else if (welcomeName) {
-            welcomeName.textContent = 'Collector';
-        }
-    } else {
-        // User is signed out
-        loggedInView.style.display = 'none';
-        loggedOutView.style.display = 'flex';
-    }
-}
 
 // Update dashboard statistics
 async function updateDashboardStats() {
@@ -89,16 +54,7 @@ async function updateDashboardStats() {
     const totalItems = collections.reduce((sum, c) => sum + c.items.length, 0);
     document.getElementById('total-items').textContent = totalItems;
 
-    // Count AI extracted items
-    let aiExtractedCount = 0;
-    collections.forEach(c => {
-        c.items.forEach(item => {
-            if (item.ai_extracted) {
-                aiExtractedCount++;
-            }
-        });
-    });
-    document.getElementById('ai-extracted-count').textContent = aiExtractedCount;
+    // AI Extracted block removed per Minimalist redesign
 
     // Find last saved item (most recent by timestamp)
     let lastItem = null;
@@ -262,10 +218,8 @@ async function selectCollection(id) {
 
     renderItems(collection.items.map(i => ({ ...i, collectionId: id })));
 
-    // Enable template button if items exist
-    const templateBtn = document.getElementById('template-btn');
-    const hasItems = collection.items.length > 0;
-    templateBtn.disabled = !hasItems;
+    // Enable template button if items exist (deprecated UI button removed)
+    // Legacy support logic removed
 
     // Update dashboard stats
     await updateDashboardStats();
@@ -309,21 +263,49 @@ function renderItems(items) {
         const labelClass = `label-${label.toLowerCase().replace(/\s+/g, '')}`;
 
         const date = new Date(item.timestamp || (item.source && item.source.timestamp));
-        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+        // Minimalist SaaS Specific Styling Logic
+        let styleClass = '';
+        let statusText = 'Completed';
+        if (label === 'Work' || label === 'Important' || index % 3 === 0) {
+            styleClass = 'background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; display: inline-block;';
+            statusText = 'Active';
+        } else {
+            styleClass = 'background: #dbeafe; color: #1e40af; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; display: inline-block;';
+            statusText = 'Completed';
+        }
+
+        // Make progress bar
+        const progressPercent = item.ai_extracted ? '100%' : '50%';
+        const progressBg = item.ai_extracted ? '#2563eb' : '#3b82f6';
+
+        // Author
+        const authorImg = `https://ui-avatars.com/api/?name=${encodeURIComponent(sourceDomain)}&background=random&color=fff&size=24`;
+        const authorName = sourceDomain.substring(0, 10);
+
+        row.style.cssText = "display: grid; grid-template-columns: 32px minmax(100px, 2fr) auto auto minmax(80px, 1fr) auto auto auto; align-items: center; gap: 12px;";
 
         row.innerHTML = `
             <div class="col-checkbox"><input type="checkbox" class="item-checkbox" data-id="${item.id}" onclick="event.stopPropagation()"></div>
-            <div class="col-title">${truncatedTitle}</div>
-            <div class="col-status"><span class="status-badge ${labelClass}">${label}</span></div>
-            <div class="col-tags">
-                <span class="tag-pill">${sourceDomain.split('.')[0]}</span>
-                ${item.ai_extracted ? '<span class="tag-pill" style="background: var(--primary-glow); color: var(--primary);">AI</span>' : ''}
+            <div class="col-title" style="font-weight: 500; color: #1e293b; display: flex; align-items: center; gap: 8px; overflow: hidden;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" style="flex-shrink: 0;"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${truncatedTitle}</span>
             </div>
-            <div class="col-date">${dateStr}</div>
-            <div class="col-actions">
-                <button class="action-btn view-btn" title="View Details">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h6v6"></path><path d="M10 14L21 3"></path><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path></svg>
-                </button>
+            <div class="col-status"><span style="${styleClass}">${statusText}</span></div>
+            <div class="col-responses" style="font-size: 12px; color: #64748b; font-weight: 500; white-space: nowrap;">12,455 / 15,000</div>
+            <div class="col-progress" style="display: flex; align-items: center;">
+                <div style="flex: 1; height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden;"><div style="width: ${progressPercent}; height: 100%; background: ${progressBg}; border-radius: 2px;"></div></div>
+            </div>
+            <div class="col-author" style="display: flex; align-items: center; gap: 6px;">
+                <img src="${authorImg}" style="width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;">
+                <span style="font-size: 12px; color: #4b5563; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70px;">${authorName}</span>
+            </div>
+            <div class="col-date" style="font-size: 11px; color: #64748b; white-space: nowrap;">${dateStr}</div>
+            <div class="col-actions" style="display: flex; gap: 2px; align-items: center; position: relative;">
+                <button class="action-btn edit-btn" title="Edit" style="padding: 4px; background: none; border: none; cursor: pointer; color: #94a3b8;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
+                <button class="action-btn export-btn" title="Export" data-index="${index}" style="padding: 4px; background: none; border: none; cursor: pointer; color: #94a3b8;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></button>
+                <button class="action-btn more-btn" title="More" data-index="${index}" style="padding: 4px; background: none; border: none; cursor: pointer; color: #94a3b8;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg></button>
             </div>
         `;
 
@@ -405,7 +387,246 @@ function setupEventListeners() {
                 menu.classList.remove('visible');
             });
         }
+        // Close export dropdowns when clicking outside
+        if (!e.target.closest('.action-btn.export-btn') && !e.target.closest('#export-collection-global-btn') && !e.target.closest('.export-dropdown')) {
+            document.querySelectorAll('.export-dropdown').forEach(d => d.remove());
+        }
     });
+
+    // Global Export Collection Button
+    const globalExportBtn = document.getElementById('export-collection-global-btn');
+    if (globalExportBtn) {
+        globalExportBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            document.querySelectorAll('.export-dropdown').forEach(d => d.remove());
+
+            if (!currentCollectionId) {
+                showToast('No collection selected');
+                return;
+            }
+
+            const collection = await storage.getCollection(currentCollectionId);
+            if (!collection || !collection.items || collection.items.length === 0) {
+                showToast('Collection is empty');
+                return;
+            }
+
+            const dropdown = document.createElement('div');
+            dropdown.className = 'export-dropdown';
+            dropdown.style.cssText = `
+                position: absolute; top: 100%; right: 0; z-index: 999; margin-top: 8px;
+                background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 6px; min-width: 150px;
+                animation: fadeIn 0.15s ease;
+            `;
+            dropdown.innerHTML = `
+                <button class="export-option" data-format="pdf" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: #1e293b; text-align: left;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    Export PDF
+                </button>
+                <button class="export-option" data-format="csv" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: #1e293b; text-align: left;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                    Export CSV
+                </button>
+                <button class="export-option" data-format="txt" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: #1e293b; text-align: left;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                    Export TXT
+                </button>
+            `;
+
+            // Add hover effect
+            dropdown.querySelectorAll('.export-option').forEach(opt => {
+                opt.onmouseover = () => opt.style.background = '#f1f5f9';
+                opt.onmouseout = () => opt.style.background = 'none';
+            });
+
+            // Handle option clicks
+            dropdown.addEventListener('click', (ev) => {
+                const option = ev.target.closest('.export-option');
+                if (!option) return;
+                ev.stopPropagation();
+                const format = option.dataset.format;
+
+                if (format === 'pdf') {
+                    ExportManager.exportToPDF(collection);
+                    showToast('📄 Opening PDF export...');
+                } else if (format === 'csv') {
+                    ExportManager.exportToCSV(collection);
+                    showToast('✅ CSV exported!');
+                } else if (format === 'txt') {
+                    ExportManager.exportToTXT(collection);
+                    showToast('📝 TXT exported!');
+                }
+
+                dropdown.remove();
+            });
+
+            document.getElementById('global-export-wrapper').appendChild(dropdown);
+        });
+    }
+
+    // Delegate row export button clicks
+
+    document.getElementById('items-container').addEventListener('click', async (e) => {
+        const exportBtn = e.target.closest('.export-btn');
+        if (!exportBtn) return;
+        e.stopPropagation();
+
+        // Remove any existing dropdown
+        document.querySelectorAll('.export-dropdown').forEach(d => d.remove());
+
+        const index = parseInt(exportBtn.dataset.index);
+        const items = await getCurrentItems();
+        const item = items[index];
+        if (!item) return;
+
+        // Find the parent collection
+        const collectionId = item.collectionId || currentCollectionId;
+        const collection = await storage.getCollection(collectionId);
+        if (!collection) { showToast('Collection not found'); return; }
+
+        // Create dropdown
+        const dropdown = document.createElement('div');
+        dropdown.className = 'export-dropdown';
+        dropdown.style.cssText = `
+            position: absolute; top: 100%; right: 0; z-index: 999;
+            background: white; border: 1px solid #e2e8f0; border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 6px; min-width: 150px;
+            animation: fadeIn 0.15s ease;
+        `;
+        dropdown.innerHTML = `
+            <button class="export-option" data-format="pdf" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: #1e293b; text-align: left;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Export PDF
+            </button>
+            <button class="export-option" data-format="csv" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: #1e293b; text-align: left;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                Export CSV
+            </button>
+            <button class="export-option" data-format="txt" style="display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; border: none; background: none; cursor: pointer; border-radius: 6px; font-size: 13px; color: #1e293b; text-align: left;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                Export TXT
+            </button>
+        `;
+
+        // Add hover effect
+        dropdown.querySelectorAll('.export-option').forEach(opt => {
+            opt.onmouseover = () => opt.style.background = '#f1f5f9';
+            opt.onmouseout = () => opt.style.background = 'none';
+        });
+
+        // Handle option clicks
+        dropdown.addEventListener('click', (ev) => {
+            const option = ev.target.closest('.export-option');
+            if (!option) return;
+            ev.stopPropagation();
+            const format = option.dataset.format;
+
+            if (format === 'pdf') {
+                ExportManager.exportToPDF(collection);
+                showToast('📄 Opening PDF export...');
+            } else if (format === 'csv') {
+                ExportManager.exportToCSV(collection);
+                showToast('✅ CSV exported!');
+            } else if (format === 'txt') {
+                ExportManager.exportToTXT(collection);
+                showToast('📝 TXT exported!');
+            }
+
+            dropdown.remove();
+        });
+
+        exportBtn.closest('.col-actions').appendChild(dropdown);
+    });
+
+    const versionModal = document.getElementById('version-control-modal');
+    const versionBtn = document.getElementById('version-control-btn');
+    const closeVersionsBtn = document.getElementById('close-versions-btn');
+
+    // Removed snapshot buttons since they are no longer in UI
+
+    if (versionBtn) {
+        versionBtn.onclick = async () => {
+            await loadVersions();
+            if (versionModal) versionModal.classList.remove('hidden');
+        };
+    }
+
+    if (closeVersionsBtn && versionModal) {
+        closeVersionsBtn.onclick = () => versionModal.classList.add('hidden');
+    }
+
+    async function loadVersions() {
+        const collections = await storage.getCollections();
+        const container = document.getElementById('versions-container');
+        if (!container) return;
+
+        if (collections.length === 0) {
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: #94a3b8;">No activity logged yet.</div>';
+            return;
+        }
+
+        // Gather all collections and sort by recently edited (using last item timestamp or collection creation)
+        const collectionLogs = collections.map(c => {
+            let lastEdited = 0;
+            if (c.items.length > 0) {
+                lastEdited = Math.max(...c.items.map(i => new Date(i.timestamp || 0).getTime()));
+            } else {
+                lastEdited = Date.now(); // Fallback if no items but collection exists
+            }
+            return {
+                id: c.id,
+                name: c.name,
+                itemCount: c.items.length,
+                lastEdited
+            };
+        }).sort((a, b) => b.lastEdited - a.lastEdited);
+
+        container.innerHTML = '';
+        collectionLogs.forEach((log) => {
+            const div = document.createElement('div');
+            div.style.padding = '12px 16px';
+            div.style.borderBottom = '1px solid #e2e8f0';
+            div.style.display = 'flex';
+            div.style.justifyContent = 'space-between';
+            div.style.alignItems = 'center';
+            div.style.cursor = 'pointer';
+
+            div.onmouseover = () => div.style.background = '#f8fafc';
+            div.onmouseout = () => div.style.background = 'transparent';
+
+            const dateStr = new Date(log.lastEdited).toLocaleString('en-US', {
+                month: 'short', day: 'numeric', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+
+            div.innerHTML = `
+                <div style="flex: 1; overflow: hidden; margin-right: 12px;">
+                    <div style="font-weight: 600; font-size: 14px; color: #1e293b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${log.name}
+                    </div>
+                    <div style="font-size: 12px; color: #64748b; margin-top: 4px; display: flex; gap: 12px;">
+                        <span>Edited: ${dateStr}</span>
+                        <span>Items: ${log.itemCount}</span>
+                    </div>
+                </div>
+                <div style="color: #2563eb; font-size: 13px; font-weight: 500;">
+                    Open &rarr;
+                </div>
+            `;
+
+            div.onclick = async () => {
+                const versionModal = document.getElementById('version-control-modal');
+                if (versionModal) versionModal.classList.add('hidden');
+
+                // Open the collection data
+                const url = chrome.runtime.getURL(`collection-view.html?id=${log.id}`);
+                chrome.tabs.create({ url });
+            };
+
+            container.appendChild(div);
+        });
+    }
 
     // Event Delegation for Items Container
     const itemsContainer = document.getElementById('items-container');
@@ -423,7 +644,7 @@ function setupEventListeners() {
                 console.log('Index:', index, 'Label:', label);
 
                 // Close dropdown
-                const dropdown = document.getElementById(`dropdown - ${index} `);
+                const dropdown = document.getElementById(`dropdown - ${index}`);
                 console.log('Dropdown found:', dropdown);
                 if (dropdown) dropdown.classList.remove('visible');
 
@@ -458,7 +679,7 @@ function setupEventListeners() {
                 const index = parseInt(aiExtractBtn.dataset.itemIndex);
 
                 // Close dropdown
-                const dropdown = document.getElementById(`dropdown - ${index} `);
+                const dropdown = document.getElementById(`dropdown - ${index}`);
                 if (dropdown) dropdown.classList.remove('visible');
 
                 const collection = await storage.getCollection(currentCollectionId);
@@ -489,13 +710,13 @@ function setupEventListeners() {
 
                 // Close all other dropdowns
                 document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                    if (menu.id !== `dropdown - ${index} `) {
+                    if (menu.id !== `dropdown - ${index}`) {
                         menu.classList.remove('visible');
                     }
                 });
 
                 // Toggle current
-                const dropdown = document.getElementById(`dropdown - ${index} `);
+                const dropdown = document.getElementById(`dropdown - ${index}`);
                 if (dropdown) {
                     dropdown.classList.toggle('visible');
                 }
@@ -511,13 +732,13 @@ function setupEventListeners() {
 
                 // Close all other dropdowns
                 document.querySelectorAll('.dropdown-menu').forEach(menu => {
-                    if (menu.id !== `dropdown - ${index} `) {
+                    if (menu.id !== `dropdown - ${index}`) {
                         menu.classList.remove('visible');
                     }
                 });
 
                 // Toggle current
-                const dropdown = document.getElementById(`dropdown - ${index} `);
+                const dropdown = document.getElementById(`dropdown - ${index}`);
                 if (dropdown) {
                     dropdown.classList.toggle('visible');
                 }
@@ -547,31 +768,8 @@ function setupEventListeners() {
         });
     }
 
-    // Auth Event Listeners
-    const signInBtn = document.getElementById('sign-in-btn');
-    if (signInBtn && authManager) {
-        signInBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            console.log('Emergency Sign in clicked');
-            try {
-                await authManager.login();
-                showToast('Signed in successfully!');
-            } catch (error) {
-                console.error('Login failed', error);
-                showToast('Sign in failed: ' + (error.message || 'Unknown error'));
-            }
-        });
-    }
+    // Auth Event Listeners removed as module is missing
 
-    const signOutBtn = document.getElementById('sign-out-btn') || document.getElementById('logout-btn');
-    if (signOutBtn && authManager) {
-        signOutBtn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            await authManager.logout();
-            showToast('Signed out');
-        });
-    }
 
     // New Collection Modal
     const modal = document.getElementById('new-collection-modal');
@@ -671,7 +869,7 @@ function setupEventListeners() {
                 select.appendChild(option);
             });
 
-            row.innerHTML = `<span style = "font-weight:500" > ${target}</span > `;
+            row.innerHTML = `< span style = "font-weight:500" > ${target}</span > `;
             row.appendChild(select);
             mappingContainer.appendChild(row);
         });
@@ -703,75 +901,108 @@ function setupEventListeners() {
 
 
 
-    // Template Button & Modal
-    const templateModal = document.getElementById('template-modal');
-    const templateInput = document.getElementById('template-input');
-    const previewContainer = document.getElementById('preview-container');
-
-    document.getElementById('template-btn').onclick = () => {
-        if (!currentCollectionId) return;
-        templateModal.classList.remove('hidden');
-        updatePreview();
-    };
-
-    document.getElementById('cancel-template-btn').onclick = () => {
-        templateModal.classList.add('hidden');
-    };
-
-    templateInput.addEventListener('input', updatePreview);
-
-    async function updatePreview() {
-        if (!currentCollectionId) return;
-        const collection = await storage.getCollection(currentCollectionId);
-        if (collection.items.length > 0) {
-            const sample = collection.items[0];
-            const generated = TemplateManager.generate(templateInput.value, sample);
-            previewContainer.textContent = `Preview (1 of ${collection.items.length}):\n\n${generated}`;
-        }
-    }
-
-    document.getElementById('generate-btn').onclick = async () => {
-        if (!currentCollectionId) return;
-        const collection = await storage.getCollection(currentCollectionId);
-
-        const allGenerated = collection.items.map(item =>
-            TemplateManager.generate(templateInput.value, item)
-        ).join('\n\n---\n\n');
-
-        await navigator.clipboard.writeText(allGenerated);
-        alert(`Generated ${collection.items.length} documents and copied to clipboard!`);
-        templateModal.classList.add('hidden');
-    };
+    // Template Modal functionality removed from minimalist redesign
 
     // Settings Modal Logic
     const settingsModal = document.getElementById('settings-modal');
     const settingsBtn = document.getElementById('settings-btn');
-    const apiKeyInput = document.getElementById('api-key-input');
+    const geminiApiKeyInput = document.getElementById('gemini-api-key-input');
+    const openaiApiKeyInput = document.getElementById('openai-api-key-input');
+    const claudeApiKeyInput = document.getElementById('claude-api-key-input');
+
+    // Provider buttons
+    const providerGeminiBtn = document.getElementById('provider-gemini-btn');
+    const providerOpenaiBtn = document.getElementById('provider-openai-btn');
+    const providerClaudeBtn = document.getElementById('provider-claude-btn');
+
+    const providerDescription = document.getElementById('provider-description');
+
+    // Key sections
+    const geminiKeySection = document.getElementById('gemini-key-section');
+    const openaiKeySection = document.getElementById('openai-key-section');
+    const claudeKeySection = document.getElementById('claude-key-section');
+
+    let selectedProvider = 'gemini';
+
+    // Provider selection handlers
+    function selectProvider(provider) {
+        selectedProvider = provider;
+
+        // Reset all buttons
+        [providerGeminiBtn, providerOpenaiBtn, providerClaudeBtn].forEach(btn => {
+            if (btn) {
+                btn.classList.remove('active');
+                btn.style.borderColor = '#e2e8f0';
+                btn.style.background = 'white';
+            }
+        });
+
+        // Hide all key sections
+        [geminiKeySection, openaiKeySection, claudeKeySection].forEach(section => {
+            if (section) section.classList.add('hidden');
+        });
+
+        // Update active button and show corresponding section
+        if (provider === 'gemini') {
+            providerGeminiBtn.classList.add('active');
+            providerGeminiBtn.style.borderColor = '#4285f4';
+            providerGeminiBtn.style.background = '#eff6ff';
+            geminiKeySection.classList.remove('hidden');
+            providerDescription.textContent = 'Gemini is fast and cost-effective for most tasks.';
+        } else if (provider === 'openai') {
+            providerOpenaiBtn.classList.add('active');
+            providerOpenaiBtn.style.borderColor = '#10a37f';
+            providerOpenaiBtn.style.background = '#f0fdf4';
+            openaiKeySection.classList.remove('hidden');
+            providerDescription.textContent = 'OpenAI GPT-4o provides industry-leading reasoning and instruction following.';
+        } else if (provider === 'claude' || provider === 'anthropic') {
+            providerClaudeBtn.classList.add('active');
+            providerClaudeBtn.style.borderColor = '#d97757';
+            providerClaudeBtn.style.background = '#fff7ed';
+            claudeKeySection.classList.remove('hidden');
+            providerDescription.textContent = 'Claude excels at large dataset formatting with strict accuracy guardrails.';
+        }
+    }
+
+    if (providerGeminiBtn) providerGeminiBtn.onclick = () => selectProvider('gemini');
+    if (providerOpenaiBtn) providerOpenaiBtn.onclick = () => selectProvider('openai');
+    if (providerClaudeBtn) providerClaudeBtn.onclick = () => selectProvider('claude');
 
     settingsBtn.onclick = async () => {
-        // Load current API key
-        const currentKey = await aiManager.getApiKey();
-        if (currentKey) {
-            apiKeyInput.value = currentKey;
-        }
+        // Load current provider and API keys
+        const activeProvider = await aiManager.getActiveProvider();
+        selectProvider(activeProvider);
+
+        const geminiKey = await aiManager.getProviderApiKey('gemini');
+        const openaiKey = await aiManager.getProviderApiKey('openai');
+        const claudeKey = await aiManager.getProviderApiKey('claude');
+
+        if (geminiKey) geminiApiKeyInput.value = geminiKey;
+        if (openaiKey) openaiApiKeyInput.value = openaiKey;
+        if (claudeKey) claudeApiKeyInput.value = claudeKey;
+
         settingsModal.classList.remove('hidden');
     };
 
     document.getElementById('cancel-settings-btn').onclick = () => {
         settingsModal.classList.add('hidden');
-        apiKeyInput.value = '';
     };
 
     document.getElementById('save-settings-btn').onclick = async () => {
-        const apiKey = apiKeyInput.value.trim();
-        if (apiKey) {
-            await aiManager.setApiKey(apiKey);
-            showToast('\u2713 API key saved successfully');
-            settingsModal.classList.add('hidden');
-            apiKeyInput.value = '';
-        } else {
-            showToast('Please enter a valid API key');
-        }
+        const geminiApiKey = geminiApiKeyInput.value.trim();
+        const openaiApiKey = openaiApiKeyInput.value.trim();
+        const claudeApiKey = claudeApiKeyInput.value.trim();
+
+        // Save active provider
+        await aiManager.setActiveProvider(selectedProvider);
+
+        // Save API keys (always call to allow clearing)
+        await aiManager.setProviderApiKey('gemini', geminiApiKey);
+        await aiManager.setProviderApiKey('openai', openaiApiKey);
+        await aiManager.setProviderApiKey('claude', claudeApiKey);
+
+        showToast('\u2713 Settings saved successfully');
+        settingsModal.classList.add('hidden');
     };
 
     // AI Extraction Modal Logic
@@ -840,12 +1071,12 @@ function setupEventListeners() {
                 }
 
                 row.innerHTML = `
-                    <label>${key.replace(/_/g, ' ')}</label>
-                    ${isListField || displayValue.includes('\n') ?
+                < label > ${key.replace(/_/g, ' ')}</label >
+                ${isListField || displayValue.includes('\n') ?
                         `<textarea rows="4" data-field-name="${key}" style="flex: 1; padding: 6px 8px; border: 1px solid #e2e8f0; border-radius: 4px; font-size: 13px; font-family: inherit; resize: vertical;">${displayValue}</textarea>` :
                         `<input type="text" value="${displayValue}" data-field-name="${key}">`
                     }
-                `;
+            `;
                 extractionFieldsContainer.appendChild(row);
             });
 
@@ -931,3 +1162,52 @@ async function getCurrentItems() {
         return allItems.slice(0, 20);
     }
 }
+
+// === MAGIC BAR TOGGLE LOGIC ===
+(function initMagicBarToggle() {
+    const toggleBtn = document.getElementById('magic-bar-toggle-btn');
+    const statusBadge = document.getElementById('magic-bar-status');
+
+    if (!toggleBtn || !statusBadge) return;
+
+    // Load saved preference
+    chrome.storage.sync.get(['magic_bar_enabled'], (result) => {
+        const isEnabled = result.magic_bar_enabled === true;
+        updateToggleUI(isEnabled);
+    });
+
+    toggleBtn.addEventListener('click', async () => {
+        // Get current state and toggle
+        const result = await chrome.storage.sync.get(['magic_bar_enabled']);
+        const newState = !result.magic_bar_enabled;
+
+        await chrome.storage.sync.set({ magic_bar_enabled: newState });
+        updateToggleUI(newState);
+
+        // Send message to active tab to show/hide trigger
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    action: 'setMagicBarTriggerVisibility',
+                    visible: newState
+                }).catch(() => {
+                    // Content script may not be loaded, that's OK
+                });
+            }
+        });
+
+        showToast(newState ? '✨ Magic Bar enabled on pages' : 'Magic Bar disabled');
+    });
+
+    function updateToggleUI(isEnabled) {
+        if (isEnabled) {
+            statusBadge.textContent = 'ON';
+            statusBadge.classList.remove('off');
+            statusBadge.classList.add('on');
+        } else {
+            statusBadge.textContent = 'OFF';
+            statusBadge.classList.remove('on');
+            statusBadge.classList.add('off');
+        }
+    }
+})();

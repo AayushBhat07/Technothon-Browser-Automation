@@ -822,16 +822,17 @@ body {
     color: #374151;
     font-weight: 500;
 }
+
 /* =========================================
    THEME 4: MODERN GLASS ✨
    ========================================= */
 .theme-modern {
     font-family: 'Inter', sans-serif;
     background: #f8fafc;
-    background-image: radial-gradient(at 0% 0%, rgba(108, 71, 255, 0.1) 0, transparent 50%), 
-                      radial-gradient(at 100% 0%, rgba(217, 70, 239, 0.1) 0, transparent 50%),
-                      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0, transparent 50%), 
-                      radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.05) 0, transparent 50%);
+    background-image: radial-gradient(at 0% 0%, rgba(108, 71, 255, 0.1) 0, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(217, 70, 239, 0.1) 0, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0, transparent 50%),
+        radial-gradient(at 0% 100%, rgba(59, 130, 246, 0.05) 0, transparent 50%);
     padding: 24px;
     gap: 24px;
 }
@@ -912,4 +913,257 @@ body {
     background: #6C47FF;
     color: white;
     box-shadow: 0 4px 12px rgba(108, 71, 255, 0.2);
+}
+
+/* =========================================
+   DEEP ENRICH INTELLIGENCE UI STYLES
+   ========================================= */
+
+.deep-enrich-card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    margin: 16px 24px;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    position: relative;
+    overflow: hidden;
+}
+
+.deep-enrich-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #6366F1, #A855F7, #EC4899);
+}
+
+.deep-enrich-header {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1F2937;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.deep-enrich-desc {
+    font-size: 12px;
+    color: #6B7280;
+    margin-bottom: 16px;
+    line-height: 1.4;
+}
+
+.deep-enrich-progress {
+    margin: 16px 0;
+    background: #F9FAFB;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+}
+
+.progress-bar {
+    height: 6px;
+    background: #E5E7EB;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: #6366F1;
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.progress-text {
+    font-size: 12px;
+    color: #4B5563;
+    display: flex;
+    justify-content: space-between;
+}
+
+.deep-enrich-results {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+/* Individual Result Card */
+.enrich-result-card {
+    background: #F9FAFB;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 13px;
+}
+
+.enrich-result-card.success {
+    border-left: 4px solid #10B981;
+}
+
+.enrich-result-card.error {
+    border-left: 4px solid #EF4444;
+}
+
+.enrich-domain {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 6px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.enrich-domain svg {
+    color: #9CA3AF;
+}
+
+.enrich-summary {
+    color: #4B5563;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.enrich-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+    margin-bottom: 10px;
+}
+
+.enrich-metric-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.enrich-metric-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: #6B7280;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.enrich-metric-val {
+    font-weight: 500;
+    color: #111827;
+}
+
+.enrich-signals {
+    margin-top: 10px;
+    background: #EEF2FF;
+    border: 1px solid #C7D2FE;
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.enrich-signals h4 {
+    font-size: 12px;
+    color: #4338CA;
+    margin-bottom: 6px;
+}
+
+.enrich-signals ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #1e293b;
+    font-size: 12px;
+}
+
+.enrich-signals li {
+    margin-bottom: 4px;
+}
+
+.enrich-confidence {
+    margin-top: 10px;
+    font-size: 11px;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.confidence-HIGH {
+    background: #D1FAE5;
+    color: #065F46;
+    border: 1px solid #A7F3D0;
+}
+
+.confidence-MEDIUM {
+    background: #FEF3C7;
+    color: #92400E;
+    border: 1px solid #FDE68A;
+}
+
+.confidence-LOW {
+    background: #FEE2E2;
+    color: #991B1B;
+    border: 1px solid #FECACA;
+}
+
+/* Combined Brief Card */
+.combined-brief-card {
+    background: linear-gradient(to bottom right, #EEF2FF, #FAF5FF);
+    border: 1px solid #C7D2FE;
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 8px;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+}
+
+.brief-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #4338CA;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.brief-summary {
+    color: #1F2937;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.brief-patterns {
+    background: white;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #E5E7EB;
+}
+
+.brief-patterns h4 {
+    color: #6B7280;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.brief-patterns ul {
+    margin: 0;
+    padding-left: 20px;
+    color: #374151;
+    font-size: 13px;
+}
+
+.brief-patterns li {
+    margin-bottom: 6px;
 }

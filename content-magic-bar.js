@@ -27,17 +27,110 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
         init() {
             console.log('[SmartCollector v2.1] Magic Bar init() called, setting up message listener...');
 
-            // Listen for messages from background script
+            // Listen for messages from background script and sidepanel
             chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 console.log('[SmartCollector v2.1] Magic Bar received message:', request);
                 if (request.action === 'toggleMagicBar') {
                     console.log('[SmartCollector v2.1] Toggling Magic Bar...');
                     this.toggle();
-                    sendResponse({ success: true }); // Acknowledge message
+                    sendResponse({ success: true });
+                }
+                if (request.action === 'setMagicBarTriggerVisibility') {
+                    this.setTriggerVisibility(request.visible);
+                    sendResponse({ success: true });
                 }
             });
 
+            // Check preference and create floating trigger if enabled
+            this.initFloatingTrigger();
+
             console.log('[SmartCollector v2.1] Magic Bar listener registered successfully');
+        }
+
+        /**
+         * Checks preference and creates the floating trigger if enabled.
+         */
+        async initFloatingTrigger() {
+            try {
+                const result = await chrome.storage.sync.get(['magic_bar_enabled']);
+                if (result.magic_bar_enabled === true) {
+                    this.createFloatingTrigger();
+                } else {
+                    console.log('[SmartCollector] Magic Bar trigger disabled by preference.');
+                }
+            } catch (e) {
+                // Fallback: show trigger if storage fails
+                this.createFloatingTrigger();
+            }
+        }
+
+        /**
+         * Shows or hides the floating trigger.
+         */
+        setTriggerVisibility(visible) {
+            const trigger = document.getElementById('smart-collector-floating-trigger');
+            if (visible) {
+                if (!trigger) {
+                    this.createFloatingTrigger();
+                } else {
+                    trigger.style.display = 'flex';
+                }
+            } else {
+                if (trigger) {
+                    trigger.style.display = 'none';
+                }
+            }
+        }
+
+        /**
+         * Creates a floating ✨ button in the bottom-right corner to toggle the Magic Bar.
+         */
+        createFloatingTrigger() {
+            // Prevent duplicate
+            if (document.getElementById('smart-collector-floating-trigger')) return;
+
+            const trigger = document.createElement('div');
+            trigger.id = 'smart-collector-floating-trigger';
+            trigger.innerHTML = '✨';
+            trigger.title = 'Smart Collector Magic Bar (Cmd+Z)';
+
+            // Inline styles, max z-index, non-intrusive
+            Object.assign(trigger.style, {
+                position: 'fixed',
+                bottom: '24px',
+                right: '24px',
+                width: '48px',
+                height: '48px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                color: 'white',
+                fontSize: '22px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
+                zIndex: '2147483646',
+                transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                userSelect: 'none'
+            });
+
+            trigger.addEventListener('mouseenter', () => {
+                trigger.style.transform = 'scale(1.1)';
+                trigger.style.boxShadow = '0 6px 20px rgba(99, 102, 241, 0.5)';
+            });
+
+            trigger.addEventListener('mouseleave', () => {
+                trigger.style.transform = 'scale(1)';
+                trigger.style.boxShadow = '0 4px 14px rgba(99, 102, 241, 0.4)';
+            });
+
+            trigger.addEventListener('click', () => {
+                this.toggle();
+            });
+
+            document.body.appendChild(trigger);
+            console.log('[SmartCollector] Floating trigger button created.');
         }
 
         createUI() {
@@ -72,15 +165,21 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                     z-index: 2147483647; /* Max z-index */
                     position: fixed;
-                    top: 20px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    width: 600px;
-                    max-width: 90vw;
-                    pointer-events: none; /* Let clicks pass through when hidden/transparent */
+                    top: 0;
+                    left: 0;
+                    width: 100vw;
+                    height: 100vh;
+                    pointer-events: none; /* Pass through clicks */
                 }
 
                 .magic-bar-container {
+                    position: absolute; /* Changed from default flow */
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%) translateY(-20px); /* Centered + Offset for animation */
+                    width: 600px;
+                    max-width: 90vw;
+                    
                     background: white;
                     border-radius: 12px;
                     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.05);
@@ -90,7 +189,6 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                     gap: 12px;
                     pointer-events: auto; /* Re-enable clicks */
                     opacity: 0;
-                    transform: translateY(-20px);
                     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
                     max-height: 90vh;
                     overflow: hidden;
@@ -98,8 +196,39 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
 
                 .magic-bar-container.visible {
                     opacity: 1 !important;
-                    transform: translateY(0) !important;
+                    transform: translateX(-50%) translateY(0) !important;
                     display: flex !important;
+                }
+
+                /* Magic Trigger Button */
+                .magic-trigger {
+                    position: absolute;
+                    bottom: 20px;
+                    right: 20px;
+                    width: 40px;
+                    height: 40px;
+                    background: white;
+                    border-radius: 50%;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0,0,0,0.05);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                    pointer-events: auto;
+                    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+                    opacity: 0.6;
+                    color: #6366F1;
+                }
+
+                .magic-trigger:hover {
+                    opacity: 1;
+                    transform: scale(1.1);
+                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+                }
+
+                .magic-trigger svg {
+                    width: 20px;
+                    height: 20px;
                 }
 
                 .input-wrapper {
@@ -300,6 +429,14 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                     <span>Analyzing page content...</span>
                 </div>
 
+                <div class="feed-banner" style="display:none; padding: 10px 12px; background: linear-gradient(135deg, #dbeafe, #ede9fe); border-radius: 8px; margin-bottom: 4px; font-size: 12px; color: #4338ca;">
+                    <div style="display:flex; align-items:center; gap:6px; font-weight:600; margin-bottom:4px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+                        <span class="feed-banner-title">Feed Ingestion</span>
+                    </div>
+                    <span class="feed-banner-details"></span>
+                </div>
+
                 <div class="paste-area hidden">
                     <div style="padding: 12px; background: #FEF3C7; border-radius: 6px; margin-bottom: 12px;">
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -332,8 +469,24 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                 </div>
             `;
 
+            // Trigger Button
+            const trigger = document.createElement('div');
+            trigger.className = 'magic-trigger';
+            trigger.title = 'Open Smart Collector';
+            trigger.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+            `;
+            trigger.addEventListener('click', (e) => {
+                // Prevent propagation to document
+                e.stopPropagation();
+                this.toggle();
+            });
+
             this.shadowRoot.appendChild(style);
             this.shadowRoot.appendChild(wrapper);
+            this.shadowRoot.appendChild(trigger);
             document.body.appendChild(this.container);
 
             // Bind events
@@ -365,7 +518,7 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
 
                 // If click is inside shadow root (handled by composedPath)
                 const path = e.composedPath();
-                if (path.includes(this.container) || path.includes(wrapper)) return;
+                if (path.includes(this.container) || path.includes(wrapper) || path.includes(trigger)) return;
 
                 this.hide();
             });
@@ -416,7 +569,50 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             const query = this.input.value.trim();
             if (!query) return;
 
-            // Check if we're in paste mode (for fallback)
+            // --- Feed Intent Detection (client-side heuristic) ---
+            const feedActionWords = ['extract', 'get', 'fetch', 'find', 'show', 'list', 'pull', 'search for', 'look for', 'give me', 'what are', 'latest', 'recent', 'trending', 'top', 'breaking'];
+            const feedTopicWords = ['ai', 'artificial intelligence', 'machine learning', 'tech', 'technology', 'funding', 'startup', 'venture', 'science', 'business', 'news', 'headline', 'jobs', 'hiring', 'security', 'cyber', 'hacking'];
+            const lq = query.toLowerCase();
+            const isFeedQuery = feedActionWords.some(w => lq.includes(w)) && feedTopicWords.some(w => lq.includes(w));
+
+            if (isFeedQuery) {
+                // Feed queries don't require page text
+                this.setLoading(true, true);
+                this.clearResults();
+                const loadingSpan = this.loadingIndicator.querySelector('span');
+                if (loadingSpan) loadingSpan.textContent = 'Fetching external feeds & extracting data...';
+
+                try {
+                    const response = await chrome.runtime.sendMessage({
+                        action: 'aiExtract',
+                        text: '', // Feed queries don't need page text
+                        query: query,
+                        url: window.location.href,
+                        title: document.title
+                    });
+
+                    if (response.success) {
+                        console.log('[SmartCollector] Feed extraction successful');
+                        this.renderResults(response.data);
+                        // Show feed banner
+                        if (response.data.feedMetadata) {
+                            this.showFeedBanner(response.data.feedMetadata);
+                        }
+                    } else {
+                        alert('Feed extraction failed: ' + response.error);
+                    }
+                } catch (error) {
+                    console.error('[SmartCollector] Feed extraction error:', error);
+                    alert('Feed extraction error: ' + error.message);
+                } finally {
+                    this.setLoading(false);
+                    const loadingSpan2 = this.loadingIndicator.querySelector('span');
+                    if (loadingSpan2) loadingSpan2.textContent = 'Analyzing page content...';
+                }
+                return;
+            }
+
+            // --- Standard Page Extraction (existing logic) ---
             const pasteArea = this.shadowRoot.querySelector('.paste-area');
             const pasteInput = this.shadowRoot.querySelector('#paste-input');
 
@@ -497,12 +693,18 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                 const response = await chrome.runtime.sendMessage({
                     action: 'aiExtract',
                     text: pageText,
-                    query: query
+                    query: query,
+                    url: window.location.href, // Include URL for audit
+                    title: document.title      // Include Title for audit
                 });
 
                 if (response.success) {
                     console.log(`[SmartCollector] Extraction successful from ${source}, found ${response.data.length} results`);
                     this.renderResults(response.data);
+                    // Show feed banner if feed metadata is present
+                    if (response.data.feedMetadata) {
+                        this.showFeedBanner(response.data.feedMetadata);
+                    }
                 } else {
                     console.error('[SmartCollector] AI extraction failed:', response.error);
 
@@ -560,6 +762,26 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             if (thead) thead.innerHTML = '';
             if (tbody) tbody.innerHTML = '';
             this.currentData = null;
+            // Hide feed banner
+            const banner = this.shadowRoot?.querySelector('.feed-banner');
+            if (banner) banner.style.display = 'none';
+        }
+
+        showFeedBanner(feedMetadata) {
+            const banner = this.shadowRoot?.querySelector('.feed-banner');
+            if (!banner) return;
+
+            const title = banner.querySelector('.feed-banner-title');
+            const details = banner.querySelector('.feed-banner-details');
+
+            if (title) title.textContent = `Feed Ingestion — ${feedMetadata.topic}`;
+            if (details) {
+                const sources = feedMetadata.sourcesUsed.map(s => s.name).join(', ');
+                const time = new Date(feedMetadata.retrievedAt).toLocaleTimeString();
+                details.textContent = `${feedMetadata.totalFeedEntries} entries retrieved from ${feedMetadata.feedCount} feed(s), showing top ${feedMetadata.previewEntries}: ${sources} · Retrieved at ${time}`;
+            }
+
+            banner.style.display = 'block';
         }
 
         renderResults(data) {
@@ -601,9 +823,6 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             // Fetch collections to populate the selector
             this.loadCollections();
 
-            // Get headers from first object
-            const headers = Object.keys(data[0]);
-            console.log('[SmartCollector] Table headers:', headers);
             const thead = this.table?.querySelector('thead');
             const tbody = this.table?.querySelector('tbody');
 
@@ -616,9 +835,52 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             thead.innerHTML = '';
             tbody.innerHTML = '';
 
+            // CHECK FOR PARAGRAPH MODE
+            // If we have exactly 1 item, and it has keys like "Content", "Summary", "Full Text", "Text"
+            // AND the value is long (> 50 chars), render as a text block
+            const firstItem = data[0];
+            const keys = Object.keys(firstItem);
+            const isSingleItem = data.length === 1;
+            const hasContentKey = keys.some(k => ['content', 'summary', 'full content', 'text', 'full_content', 'paragraph'].includes(k.toLowerCase()));
+
+            if (isSingleItem && (hasContentKey || keys.length === 1)) {
+                const contentKey = hasContentKey ? keys.find(k => ['content', 'summary', 'full content', 'text', 'full_content', 'paragraph'].includes(k.toLowerCase())) : keys[0];
+                const contentText = firstItem[contentKey];
+
+                if (typeof contentText === 'string' && contentText.length > 50) {
+                    console.log('[SmartCollector] Detected Paragraph/Summary mode');
+
+                    // Render as a single cell spanning full width with special styling
+                    const row = document.createElement('tr');
+                    const td = document.createElement('td');
+                    td.colSpan = 1;
+                    td.style.whiteSpace = 'pre-wrap';
+                    td.style.lineHeight = '1.6';
+                    td.style.fontSize = '14px';
+                    td.style.color = '#1F2937';
+                    td.style.padding = '16px';
+                    td.style.backgroundColor = '#F9FAFB';
+                    td.style.borderRadius = '8px';
+                    td.textContent = contentText;
+
+                    row.appendChild(td);
+                    tbody.appendChild(row);
+
+                    // Add a header just for context
+                    const headerRow = document.createElement('tr');
+                    const th = document.createElement('th');
+                    th.textContent = contentKey.replace(/_/g, ' '); // e.g. "Full Content"
+                    th.style.textAlign = 'left';
+                    headerRow.appendChild(th);
+                    thead.appendChild(headerRow);
+
+                    return;
+                }
+            }
+
             // Render headers
             const headerRow = document.createElement('tr');
-            headers.forEach(header => {
+            keys.forEach(header => {
                 const th = document.createElement('th');
                 th.textContent = header.charAt(0).toUpperCase() + header.slice(1).replace(/_/g, ' ');
                 headerRow.appendChild(th);
@@ -628,7 +890,7 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             // Render rows
             data.forEach(item => {
                 const row = document.createElement('tr');
-                headers.forEach(header => {
+                keys.forEach(header => {
                     const td = document.createElement('td');
                     const value = item[header];
                     // Handle long text values

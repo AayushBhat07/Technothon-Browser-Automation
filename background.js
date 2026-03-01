@@ -1,8 +1,12 @@
 // Background service worker
 import { storage } from './modules/storage.js';
-import { DataDetector } from './utils/parser.js';
+import { DataDetector } from './modules/parser.js';
+import { aiManager } from './modules/ai.js';
+import { detectFeedIntent } from './modules/feeds/feedRouter.js';
+import { fetchMultipleFeeds } from './modules/feeds/rssFetcher.js';
+import { normalizeFeedResults } from './modules/feeds/feedNormalizer.js';
 
-console.log("Smart Web Collector: Background service worker started.");
+console.log("Zappo: Background service worker started.");
 
 chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({
@@ -130,20 +134,38 @@ async function handleSaveSelection(data, tabId) {
 
 // Magic Bar Command Handler
 chrome.commands.onCommand.addListener((command) => {
+    console.log('Command received:', command);
     if (command === 'toggle-magic-bar') {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            if (tabs[0]) {
+            if (tabs[0] && tabs[0].url) {
+                // Prevent injection on restricted Chrome pages
+                if (tabs[0].url.startsWith('chrome://') || tabs[0].url.startsWith('chrome-extension://') || tabs[0].url.startsWith('edge://')) {
+                    console.warn('Cannot inject Magic Bar on restricted browser pages.');
+                    return;
+                }
+
+                console.log('Toggling Magic Bar in tab:', tabs[0].id);
                 // Script is already loaded via manifest, just send the message
                 chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleMagicBar' })
+                    .then(() => console.log('Message sent successfully'))
                     .catch((err) => {
                         console.warn('Failed to toggle Magic Bar:', err);
+                        // Try injecting if it failed (maybe content script isn't running?)
+                        chrome.scripting.executeScript({
+                            target: { tabId: tabs[0].id },
+                            files: ['content-magic-bar.js']
+                        }).then(() => {
+                            console.log('Injected content-magic-bar.js, retrying toggle...');
+                            setTimeout(() => {
+                                chrome.tabs.sendMessage(tabs[0].id, { action: 'toggleMagicBar' });
+                            }, 100);
+                        }).catch(e => console.error('Injection failed:', e));
                     });
             }
         });
     }
 });
 
-import { aiManager } from './modules/ai.js';
 
 // Magic Bar Message Handler
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -155,9 +177,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
 
     if (request.action === 'aiExtract') {
-        aiManager.extractAndVerify(request.text, request.query)
-            .then(data => sendResponse({ success: true, data: data }))
-            .catch(error => sendResponse({ success: false, error: error.message }));
+        console.log(`[Background] aiExtract request: "${request.query}" for URL: ${request.url}`);
+        const context = {
+            url: request.url,
+            title: request.title
+        };
+
+        // Check for external feed intent
+        const feedIntent = detectFeedIntent(request.query);
+
+        if (feedIntent.isFeedIntent) {
+            // Route to Feed Ingestion Pipeline
+            handleFeedExtraction(feedIntent, request.query, context)
+                .then(result => sendResponse(result))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+        } else {
+            // Standard page extraction
+            aiManager.extractAndVerify(request.text, request.query, context)
+                .then(data => sendResponse({ success: true, data: data }))
+                .catch(error => sendResponse({ success: false, error: error.message }));
+        }
         return true; // Async response
     }
 
@@ -174,7 +213,95 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             .catch(error => sendResponse({ success: false, error: error.message }));
         return true;
     }
+
+    if (request.action === 'deepEnrichFetch') {
+        fetch(request.url, {
+            method: 'GET',
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8'
+            },
+            signal: AbortSignal.timeout(5000)
+        })
+            .then(async (res) => {
+                if (res.status === 401 || res.status === 403) {
+                    return sendResponse({ success: false, reason: `HTTP ${res.status} (Protected)` });
+                }
+                if (!res.ok) {
+                    return sendResponse({ success: false, reason: `HTTP ${res.status}` });
+                }
+                const html = await res.text();
+
+                // Basic bot protection checks
+                if (!html || html.trim().length === 0) {
+                    return sendResponse({ success: false, reason: 'Empty body response' });
+                }
+                if (html.toLowerCase().includes('cloudflare') && (html.toLowerCase().includes('challenge') || html.toLowerCase().includes('ray id'))) {
+                    return sendResponse({ success: false, reason: 'Cloudflare challenge detected' });
+                }
+                if (html.toLowerCase().includes('captcha') && html.toLowerCase().includes('verify')) {
+                    return sendResponse({ success: false, reason: 'CAPTCHA detected' });
+                }
+
+                sendResponse({ success: true, html: html });
+            })
+            .catch(error => {
+                sendResponse({ success: false, reason: error.name === 'TimeoutError' ? 'Fetch timeout' : error.message });
+            });
+        return true;
+    }
 });
+
+/**
+ * Handle Feed-Based Extraction Pipeline
+ * 1. Fetch feeds -> 2. Normalize -> 3. AI Extract+Verify -> 4. Return preview
+ */
+async function handleFeedExtraction(feedIntent, query, context) {
+    console.log('[FeedIngestion] Starting feed extraction for topic:', feedIntent.topic);
+
+    // Step 1: Fetch all feeds for the detected topic
+    const feedResults = await fetchMultipleFeeds(feedIntent.feeds);
+
+    if (feedResults.length === 0 || feedResults.every(r => r.entries.length === 0)) {
+        return {
+            success: false,
+            error: `No feed data retrieved for topic "${feedIntent.topicLabel}". The feeds may be temporarily unavailable.`
+        };
+    }
+
+    // Step 2: Normalize feed entries into a text block
+    const normalized = normalizeFeedResults(feedResults, feedIntent.topicLabel);
+    console.log(`[FeedIngestion] Normalized ${normalized.entryCount} entries from ${feedResults.length} feeds`);
+
+    // Step 3: Run through AI extraction + verification pipeline
+    const feedContext = {
+        url: `feed://${feedIntent.topic}`,
+        title: `Feed Ingestion: ${feedIntent.topicLabel}`
+    };
+
+    const extractedData = await aiManager.extractAndVerify(
+        normalized.textBlock,
+        query,
+        feedContext
+    );
+
+    // Step 4: Attach feed metadata to the response
+    if (extractedData) {
+        extractedData.feedMetadata = {
+            topic: feedIntent.topicLabel,
+            topicId: feedIntent.topic,
+            timeRelevance: feedIntent.timeRelevance,
+            sourcesUsed: normalized.metadata.sourcesUsed,
+            retrievedAt: normalized.metadata.retrievedAt,
+            totalFeedEntries: normalized.metadata.totalEntries,
+            previewEntries: normalized.metadata.previewEntries,
+            feedCount: normalized.metadata.feedCount,
+            isFeedData: true
+        };
+    }
+
+    return { success: true, data: extractedData };
+}
 
 async function handleSaveExtractedData(request) {
     try {
@@ -229,21 +356,30 @@ async function handleSaveExtractedData(request) {
                 structured: request.data,
                 query: request.query
             },
-            source: request.source,
+            source: {
+                ...request.source,
+                auditId: request.data.auditId || null, // Link to the Audit Log
+                feedMetadata: request.data.feedMetadata || null // Feed Intelligence metadata
+            },
             enriched: {},
             validation: { status: 'valid', issues: [] },
-            tags: ['ai-extracted']
+            tags: request.data.feedMetadata ? ['ai-extracted', 'feed-ingestion'] : ['ai-extracted']
         };
 
         await storage.addItemToCollection(targetCollection.id, newItem);
+
+        // Removed Self-Audit & GitHub Commit as per user request
 
         chrome.notifications.create({
             type: 'basic',
             iconUrl: 'assets/icons/icon48.png',
             title: 'Data Saved',
-            message: `Saved ${request.data.length} items to "AI Extractions"`
+            message: `Saved ${request.data.length} items to "${targetCollection.name}"`
         });
     } catch (error) {
         console.error('Error saving extracted data:', error);
     }
 }
+
+// Expose storage globally for debugging/console access
+// globalThis.storage = storage;

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Smart Web Collector",
+  "name": "Zappo",
   "version": "1.0.0",
   "description": "Intelligent web data collection, enrichment, and export.",
   "permissions": [
@@ -8,23 +8,28 @@
     "scripting",
     "storage",
     "contextMenus",
-    "notifications",
-    "identity"
+    "notifications"
   ],
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0JG8SF5kM1HapxQp8qhHTMiTvDpeP3qEPuTMEn8bkCehj/Qt63V4tkrVPdkVahVowcwA6JhqVIqRDqqm+/+0P91XI+GDkUmOKW12Bh8BLRXHTpJcv8QpYlGu/a/SsYVGC9yRaq6nWKDLu+zcO6yHn3iHdjXyEtXOfetoZGdxd0BkKGA4FhHZIEpBKCUw3im/ri2EavjIZyxUwa73g/nXdmH0tTLsjr3mzktSIjrCoOTP1udjvgaQ7RQAJXpkxrlDNb68SyM7B0QdmnPkDkw9HtpnlTLHOU7+ZIo8SCNEMVqhF8OYOoW8C25q4p7BsAGe/7nGLF/7vLVl0uX15QGpvwIDAQAB",
-  "oauth2": {
-    "client_id": "746562803104-gnmu4ieq4e60gbo647gvsrpgnjm7lt46.apps.googleusercontent.com",
-    "scopes": [
-      "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
-    ]
-  },
   "host_permissions": [
+    "https://*/*",
     "https://generativelanguage.googleapis.com/*",
-    "file:///*"
-  ],
-  "optional_permissions": [
-    "https://sheets.googleapis.com/*"
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "file:///*",
+    "https://techcrunch.com/*",
+    "https://feeds.arstechnica.com/*",
+    "https://www.wired.com/*",
+    "https://www.theverge.com/*",
+    "https://news.crunchbase.com/*",
+    "https://www.sciencedaily.com/*",
+    "https://phys.org/*",
+    "https://feeds.bbci.co.uk/*",
+    "https://www.reuters.com/*",
+    "https://rss.nytimes.com/*",
+    "https://stackoverflow.com/*",
+    "https://feeds.feedburner.com/*",
+    "https://krebsonsecurity.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -50,8 +55,8 @@
   "commands": {
     "toggle-magic-bar": {
       "suggested_key": {
-        "default": "Ctrl+Shift+E",
-        "mac": "Command+Shift+E"
+        "default": "Ctrl+Z",
+        "mac": "Command+Z"
       },
       "description": "Toggle Magic Extract Bar"
     }

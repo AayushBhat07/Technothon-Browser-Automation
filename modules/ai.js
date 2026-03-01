@@ -1,447 +1,465 @@
 /**
- * AI Module
- * Handles integration with Google AI Studio (Gemini) API for intelligent data extraction.
+ * AI Module - Provider-Agnostic Refactor
+ * Orchestrates multiple AI providers via the AIRouter.
  */
 
-const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent';
-const API_KEY_STORAGE_KEY = 'google_ai_api_key';
+import { storage } from './storage.js';
+import { aiRouter } from '../ai/aiRouter.js';
 
+// Legacy keys for backward compatibility
+const AI_PROVIDER_KEY = 'ai_provider';
+
+/**
+ * Main AI Manager - Backward Compatibility Wrapper
+ */
 class AIManager {
-    /**
-     * Retrieves the stored Google AI API key from chrome.storage.sync
-     * @returns {Promise<string|null>} The API key or null if not set
-     */
-    async getApiKey() {
-        return new Promise((resolve) => {
-            chrome.storage.sync.get([API_KEY_STORAGE_KEY], (result) => {
-                resolve(result[API_KEY_STORAGE_KEY] || null);
-            });
-        });
+    constructor() {
+        this.router = aiRouter;
     }
 
     /**
-     * Stores the Google AI API key in chrome.storage.sync
-     * @param {string} apiKey - The API key to store
-     * @returns {Promise<void>}
+     * Get the current active provider ID
      */
-    async setApiKey(apiKey) {
-        return new Promise((resolve) => {
-            chrome.storage.sync.set({ [API_KEY_STORAGE_KEY]: apiKey }, () => {
-                resolve();
-            });
-        });
+    async getActiveProvider() {
+        return await this.router.getActiveProviderId();
     }
 
     /**
-     * Calls the Google AI Studio (Gemini) API with the given prompt
-     * @param {string} prompt - The prompt to send to the AI
-     * @param {Object} options - Optional configuration
-     * @param {number} options.temperature - Temperature for generation (0.0-1.0)
-     * @param {number} options.maxTokens - Maximum tokens to generate
-     * @returns {Promise<string>} The AI's response text
+     * Get available providers with status
      */
-    async callGoogleAI(prompt, options = {}) {
-        const apiKey = await this.getApiKey();
-
-        if (!apiKey) {
-            throw new Error('API_KEY_NOT_SET');
+    async getAvailableProviders() {
+        const providers = this.router.getProviders();
+        const results = [];
+        for (const p of providers) {
+            const apiKey = await this.router.providers[p.id].getApiKey();
+            results.push({
+                ...p,
+                configured: !!apiKey
+            });
         }
+        return results;
+    }
 
-        const temperature = options.temperature || 0.1; // Low temperature for structured extraction
-        const maxTokens = options.maxTokens || 4096; // Increased from 1024 for complex extractions
-
-        const requestBody = {
-            contents: [{
-                parts: [{
-                    text: prompt
-                }]
-            }],
-            generationConfig: {
-                temperature: temperature,
-                maxOutputTokens: maxTokens,
-            }
+    /**
+     * Interface for calling AI through the router
+     */
+    async callAI(prompt, options = {}) {
+        const request = {
+            userPrompt: prompt,
+            systemPrompt: options.systemPrompt,
+            temperature: options.temperature,
+            maxTokens: options.maxTokens,
+            structuredOutput: options.structuredOutput,
+            providerId: options.provider
         };
 
-        try {
-            const response = await fetch(`${GEMINI_API_ENDPOINT}?key=${apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody)
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-
-                // Handle specific error cases
-                if (response.status === 429) {
-                    throw new Error('RATE_LIMIT');
-                } else if (response.status === 401 || response.status === 403) {
-                    throw new Error('INVALID_API_KEY');
-                } else if (response.status === 400) {
-                    throw new Error('INVALID_REQUEST');
-                } else {
-                    throw new Error(`API_ERROR: ${errorData.error?.message || response.statusText}`);
-                }
-            }
-
-            const data = await response.json();
-
-            // Extract the text from the response
-            if (data.candidates && data.candidates.length > 0) {
-                const candidate = data.candidates[0];
-                if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-                    return candidate.content.parts[0].text;
-                }
-            }
-
-            throw new Error('INVALID_RESPONSE');
-        } catch (error) {
-            if (error.message.startsWith('API_KEY_NOT_SET') ||
-                error.message.startsWith('RATE_LIMIT') ||
-                error.message.startsWith('INVALID_API_KEY') ||
-                error.message.startsWith('INVALID_REQUEST') ||
-                error.message.startsWith('API_ERROR') ||
-                error.message.startsWith('INVALID_RESPONSE')) {
-                throw error;
-            }
-
-            // Network or other errors
-            throw new Error(`NETWORK_ERROR: ${error.message}`);
+        // If systemPromptType is provided, get the prompt (backward compatibility for Claude logic)
+        if (options.systemPromptType) {
+            request.systemPrompt = this.getSystemPrompt(options.systemPromptType);
         }
+
+        const response = await this.router.routeRequest(request);
+
+        // Return rawText for backward compatibility with existing callAI users
+        return response.rawText;
     }
 
     /**
-     * Extracts structured data from unstructured text using AI
-     * @param {string} text - The text to extract data from
-     * @returns {Promise<Object>} Extracted structured data as JSON object
+     * Backward compatibility shim for older calls
      */
-    async extractStructuredData(text) {
-        const prompt = `Analyze this text and extract the most important structured information. Return ONLY valid JSON.
+    async callGoogleAI(prompt) {
+        return this.callAI(prompt, { provider: 'gemini' });
+    }
 
-Text: "${text}"
+    /**
+     * System prompts for various tasks
+     */
+    getSystemPrompt(type) {
+        const prompts = {
+            extraction: `You are a deterministic data extraction engine.
 
-Instructions:
-- Identify what type of content this is (contact info, article, meeting notes, research, etc.)
-- Extract the most relevant structured fields based on the content type
-- For contacts: name, company, email, phone, location, title, website
-- For articles/content: title, author, main_topic, key_points (array), summary, source, date
-- For forum threads/discussions: title, author, date/timestamp, replies_count, link, synopsis
-- For meetings: date, attendees (array), topics (array), action_items (array), decisions (array)
-- For any other type: extract the most relevant fields you identify
+Your sole task is to extract structured information from the provided source content.
 
-Return format (adapt fields based on content):
+You are NOT a chatbot.
+You are NOT allowed to speculate.
+You are NOT allowed to infer missing data.
+You are NOT allowed to fabricate.
+
+You must only extract information that is explicitly present in the provided content.
+
+Core Rules (Non-Negotiable):
+1. Only use the provided source text.
+2. Do not use external knowledge.
+3. If a field is not explicitly present, return null.
+4. If uncertain about a value, return null.
+5. Do not guess.
+6. Do not paraphrase extracted values.
+7. Preserve exact formatting from source when possible.
+8. Output strictly valid JSON.
+9. Do not include explanations.
+10. Do not include markdown.
+11. Do not include commentary.
+12. Do not wrap the JSON in code blocks.
+13. Do not add any text before or after the JSON.
+
+If the output is not valid JSON, the response is considered a failure.
+
+Extraction Objective:
+Extract structured data according to the schema provided in the user prompt.
+Only populate fields that are clearly supported by the source text.
+
+Additional Requirements:
+- Each populated field must have a corresponding sourceSnippets entry showing the exact text used.
+- If no structured data is found, return all fields as null.
+- Confidence rules:
+  - HIGH: value explicitly and clearly stated
+  - MEDIUM: value present but slightly ambiguous
+  - LOW: very limited structured data found
+
+If hallucination is detected internally, set confidence to LOW and return null fields.
+
+Failure Handling:
+If the source text contains no extractable structured data, return:
+- All fields = null
+- extractionReasoning = "No structured data detected in provided content."
+- confidence = LOW
+
+Absolute Output Rule:
+Your response must be:
+- Valid JSON
+- Schema-compliant
+- No additional text
+- No markdown
+- No formatting wrappers
+
+If any rule conflicts, prioritize returning valid JSON only.`,
+
+            verification: `You are a deterministic verification engine.
+
+Your sole responsibility is to verify previously extracted structured data against the provided source content.
+
+You are NOT allowed to extract new fields.
+You are NOT allowed to modify extracted values.
+You are NOT allowed to improve formatting.
+You are NOT allowed to guess missing values.
+You are NOT allowed to fabricate corrections.
+
+You only verify.
+
+Core Verification Rules (Non-Negotiable):
+1. Do not introduce new data.
+2. Do not modify extracted values.
+3. Only confirm or flag.
+4. A value is VERIFIED only if it clearly appears in the source text.
+5. If a value does not appear exactly or cannot be clearly supported, flag it.
+6. If formatting differs but value is clearly present, mark as VERIFIED.
+7. If ambiguous, mark as FLAGGED.
+8. Do not use external knowledge.
+9. Output strictly valid JSON.
+10. No explanations outside JSON.
+11. No markdown.
+12. No extra commentary.
+
+If output is not valid JSON, the verification is considered failed.
+
+Verification Objective:
+For each extracted field:
+- Confirm whether it is explicitly supported by the source text.
+- Identify hallucinated values.
+- Identify unsupported inferences.
+- Detect format inconsistencies.
+
+Status Logic:
+- VERIFIED: All non-null extracted fields are supported by the source text.
+- PARTIALLY_VERIFIED: Some fields are supported, some are flagged.
+- NEEDS_REVIEW: Major inconsistencies, hallucinations, or unsupported data detected.
+
+Strict Output Rule:
+Your output must be:
+- Valid JSON
+- Schema compliant
+- No additional text
+- No markdown
+- No code block wrappers
+
+If no extracted fields were provided, return:
+- verificationStatus: NEEDS_REVIEW
+- All verifiedFields: false
+- flaggedFields: all fields
+- verificationNotes: "No extracted data provided for verification."`,
+
+            transformation: `You are a data transformation specialist. Transform input data according to user instructions while preserving all factual content.
+
+TRANSFORMATION RULES:
+1. Apply ONLY the transformations explicitly requested.
+2. Never add commentary or conversational filler.
+3. Preserve all data relationships and references.
+4. If the transformation would lose information, note what was excluded.
+5. Ensure output is formatted for direct use (no markdown code blocks unless requested).`,
+
+            largeDataset: `You are a dataset formatting specialist optimized for processing large collections of structured data.
+
+STRICT FORMATTING RULES:
+1. Maintain consistent field naming across all entries.
+2. Ensure every record has the same structure (use null for missing values, don't omit keys).
+3. Escape special characters properly in JSON strings.
+4. Use proper data types (strings in quotes, numbers without, booleans as true/false).
+5. Preserve exact text content - do not paraphrase or summarize.
+6. Verify no records are accidentally omitted.
+7. Ensure no duplicate processing of the same record.`
+        };
+        return prompts[type] || null;
+    }
+
+    // ==================== Data Extraction Methods ====================
+
+    /**
+     * Orchestrates the Two-Pass Extraction -> Verification pipeline.
+     */
+    async extractAndVerify(text, query, context = {}, preferredProvider = null) {
+        console.log('[SmartCollector] === PIPELINE START ===');
+
+        const providerId = preferredProvider || await this.getActiveProvider();
+
+        // Pass 1: Extraction
+        console.log('[SmartCollector] Pass 1: Extracting Data...');
+        const extractedData = await this.extractData(text, query, providerId);
+
+        if (!extractedData || extractedData.length === 0) {
+            return this._handleEmptyExtraction(query, context);
+        }
+
+        // Pass 2: Verification
+        console.log('[SmartCollector] Pass 2: Running Verification Audit...');
+        const verificationResult = await this.runVerificationPass(text, extractedData, query, providerId);
+
+        // Audit Logging
+        const auditId = await this._saveAuditLog(extractedData, verificationResult, query, context);
+
+        extractedData.auditId = auditId;
+        extractedData.providerInfo = {
+            name: providerId,
+            model: providerId === 'gemini' ? 'gemini-2.0-flash' : (providerId === 'openai' ? 'gpt-4o' : 'claude-3-sonnet')
+        };
+
+        console.log('[SmartCollector] === PIPELINE END ===');
+        return extractedData;
+    }
+
+    async extractData(text, query, providerId) {
+        const prompt = this._getExtractionPrompt(text, query);
+        const response = await this.router.routeRequest({
+            userPrompt: prompt,
+            systemPrompt: this.getSystemPrompt('extraction'),
+            structuredOutput: true,
+            providerId: providerId
+        });
+
+        const data = response.structuredData;
+        if (!data) return [];
+        return Array.isArray(data) ? data : [data];
+    }
+
+    async runVerificationPass(sourceText, extractedData, query, providerId) {
+        const prompt = this._getVerificationPrompt(sourceText, extractedData, query);
+        const response = await this.router.routeRequest({
+            userPrompt: prompt,
+            systemPrompt: this.getSystemPrompt('verification'),
+            structuredOutput: true,
+            providerId: providerId
+        });
+
+        const result = response.structuredData || {};
+        return {
+            verificationStatus: result.verificationStatus || 'NEEDS_REVIEW',
+            verificationNotes: result.verificationNotes || 'Verification completed.',
+            verifiedFields: result.verifiedFields || [],
+            flaggedFields: result.flaggedFields || [],
+            pipelineComplete: true,
+            tokensUsed: response.tokensUsed,
+            modelName: response.modelName,
+            providerName: response.providerName
+        };
+    }
+
+    /**
+     * Builds the extraction user prompt with full schema contract.
+     */
+    _getExtractionPrompt(text, query) {
+        const sourceContent = text.substring(0, 15000);
+        return `Extraction Objective: Extract structured data matching "${query}" from the source content below.
+
+Only populate fields that are clearly supported by the source text.
+
+Schema Contract — return JSON matching this exact structure:
+
 {
-  "content_type": "contact|article|meeting|research|note|other",
-  "field1": "value1",
-  "field2": "value2",
-  ...
+  "extractedFields": {
+    "name": "string | null",
+    "email": "string | null",
+    "phone": "string | null",
+    "price": "string | null",
+    "organization": "string | null",
+    "location": "string | null",
+    "date": "string | null"
+  },
+  "sourceSnippets": {
+    "name": "string | null",
+    "email": "string | null",
+    "phone": "string | null",
+    "price": "string | null",
+    "organization": "string | null",
+    "location": "string | null",
+    "date": "string | null"
+  },
+  "extractionReasoning": "string",
+  "confidence": "LOW | MEDIUM | HIGH"
 }
 
-Rules:
-- Only include fields that are actually present in the text
-- If a field is not found, omit it completely from the JSON
-- Return ONLY the JSON object, no explanation or markdown
-- Be concise but capture all important information`;
+Additional Requirements:
+- Each populated field must have a corresponding sourceSnippets entry showing the exact text used.
+- If no structured data is found, return all fields as null.
+- Confidence rules: HIGH = value explicitly stated, MEDIUM = present but slightly ambiguous, LOW = very limited data found.
+- If the source text contains no extractable structured data, return all fields as null with extractionReasoning = "No structured data detected in provided content." and confidence = LOW.
 
-        try {
-            const response = await this.callGoogleAI(prompt, { temperature: 0.1 });
-
-            // Try to extract JSON from the response
-            // Sometimes AI wraps JSON in markdown code blocks
-            let jsonString = response.trim();
-
-            // Remove markdown code blocks if present
-            if (jsonString.startsWith('```json')) {
-                jsonString = jsonString.replace(/^```json\n/, '').replace(/\n```$/, '');
-            } else if (jsonString.startsWith('```')) {
-                jsonString = jsonString.replace(/^```\n/, '').replace(/\n```$/, '');
-            }
-
-            // Parse the JSON
-            const extractedData = JSON.parse(jsonString);
-
-            return extractedData;
-        } catch (error) {
-            // Re-throw AI-specific errors
-            if (error.message.startsWith('API_KEY_NOT_SET') ||
-                error.message.startsWith('RATE_LIMIT') ||
-                error.message.startsWith('INVALID_API_KEY')) {
-                throw error;
-            }
-
-            // If JSON parsing failed, throw specific error
-            if (error instanceof SyntaxError) {
-                throw new Error('INVALID_JSON_RESPONSE');
-            }
-
-            throw error;
-        }
+---SOURCE CONTENT START---
+${sourceContent}
+---SOURCE CONTENT END---`;
     }
 
-    /**
-     * Gets a user-friendly error message for an error
-     * @param {Error} error - The error object
-     * @returns {string} User-friendly error message
-     */
+    _getVerificationPrompt(sourceText, extractedData, query) {
+        const sourceContent = sourceText.substring(0, 10000);
+        return `Verification Objective: Verify the previously extracted data for query "${query}" against the original source content.
+
+You will receive:
+1. The original source content.
+2. The previously extracted structured JSON.
+
+Compare the extracted values strictly against the source text.
+
+Required Output Schema — return JSON matching this exact structure:
+
+{
+  "verificationStatus": "VERIFIED | PARTIALLY_VERIFIED | NEEDS_REVIEW",
+  "verifiedFields": {
+    "name": true | false,
+    "email": true | false,
+    "phone": true | false,
+    "price": true | false,
+    "organization": true | false,
+    "location": true | false,
+    "date": true | false
+  },
+  "flaggedFields": [
+    "field_name_if_flagged"
+  ],
+  "verificationNotes": "string"
+}
+
+Status Logic:
+- VERIFIED: All non-null extracted fields are supported by the source text.
+- PARTIALLY_VERIFIED: Some fields are supported, some are flagged.
+- NEEDS_REVIEW: Major inconsistencies, hallucinations, or unsupported data detected.
+
+Verification Notes Requirements:
+- Briefly explain why fields were flagged.
+- Not exceed 3 sentences.
+- Not restate all data.
+- Not modify original extracted values.
+
+If no extracted fields were provided, return verificationStatus: NEEDS_REVIEW, all verifiedFields: false, flaggedFields: all fields, verificationNotes: "No extracted data provided for verification."
+
+---PREVIOUSLY EXTRACTED DATA---
+${JSON.stringify(extractedData, null, 2)}
+---END EXTRACTED DATA---
+
+---SOURCE CONTENT START---
+${sourceContent}
+---SOURCE CONTENT END---`;
+    }
+
+    async _handleEmptyExtraction(query, context) {
+        const auditId = await storage.saveAudit({
+            sourceUrl: context.url || 'N/A',
+            sourceTitle: context.title || 'N/A',
+            prompt: `Extraction Query: ${query}`,
+            extractedFields: 'None',
+            responseSummary: 'No data found.',
+            verificationStatus: 'NEEDS_REVIEW',
+            reasoning: 'No data found.',
+            verificationResult: { verificationStatus: 'NEEDS_REVIEW', pipelineComplete: false },
+            versionId: null
+        });
+        const empty = [];
+        empty.auditId = auditId;
+        return empty;
+    }
+
+    async _saveAuditLog(extractedData, verificationResult, query, context) {
+        const fieldSummary = Object.keys(extractedData[0] || {}).join(', ');
+        const reasoning = `Extracted ${extractedData.length} item(s). ${verificationResult.verificationNotes}`;
+        return await storage.saveAudit({
+            sourceUrl: context.url || 'N/A',
+            sourceTitle: context.title || 'N/A',
+            prompt: `Extraction Query: ${query}`,
+            extractedFields: fieldSummary,
+            responseSummary: reasoning,
+            verificationStatus: verificationResult.verificationStatus,
+            reasoning: reasoning,
+            verificationResult: verificationResult,
+            versionId: null
+        });
+    }
+
+    // Unified error handling
     getErrorMessage(error) {
-        const message = error.message;
+        if (error.message === 'API_KEY_NOT_SET') return 'Please add API key in Settings';
+        if (error.message === 'RATE_LIMIT') return 'Rate limit reached. Try again.';
+        if (error.message === 'INVALID_API_KEY') return 'Invalid API key format. Check Settings.';
+        if (error.message === 'CURSOR_KEY_INVALID') return '⚠️ Detected a Cursor IDE Key. These only work inside Cursor. Please use a standard API Key from Anthropic Console.';
+        if (error.message.startsWith('REGION_OR_ACCOUNT_RESTRICTED')) return 'Account Restricted: ' + error.message.split(': ')[1];
 
-        if (message === 'API_KEY_NOT_SET') {
-            return 'Please add Google AI API key in Settings';
-        } else if (message === 'RATE_LIMIT') {
-            return 'Rate limit reached. Try again in a moment.';
-        } else if (message === 'INVALID_API_KEY') {
-            return 'Invalid API key. Please check your settings.';
-        } else if (message === 'INVALID_JSON_RESPONSE') {
-            return 'Could not extract structure. Try manual editing.';
-        } else if (message.startsWith('API_ERROR')) {
-            return `API Error: ${message.replace('API_ERROR: ', '')}`;
-        } else if (message.startsWith('NETWORK_ERROR')) {
-            return `Network Error: ${message.replace('NETWORK_ERROR: ', '')}`;
-        } else {
-            return 'An unexpected error occurred. Please try again.';
-        }
-    }
-    /**
-     * Extracts specific data based on a user query
-     * @param {string} text - The page text content
-     * @param {string} query - The user's natural language query
-     * @returns {Promise<Array<Object>>} Extracted data as an array of objects
-     */
-    /**
-     * Extracts specific data based on a user query (Step 1: Extraction)
-     * @param {string} text - The page text content
-     * @param {string} query - The user's natural language query
-     * @returns {Promise<Array<Object>>} Extracted data as an array of objects
-     */
-    async extractData(text, query) {
-        const prompt = `You are a precise data extraction assistant.
-        
-User Query: "${query}"
-
-Context Text (from webpage):
-"${text}"
-
-Instructions:
-1. Analyze the text to find data matching the User Query.
-2. **IMPORTANT: Prioritize data that appears LATER in the text (chronologically more recent).**
-3. **DEEP EXTRACTION:**
-   - When extracting "Threads", "Articles", or "Posts", capture available details like **Author, Points/Votes/Replies, Date**.
-   - **WHOLE ARTICLE REQUEST:** If the user specifically asks for the "Whole Article" or "Full Content", do NOT summarize. Capture the entire relevant body text of the article/post as a single field called 'full_content', preserving all paragraphs.
-4. **FORMATTING RULE:**
-   - If the user asks for **Data Extraction/Table/List** (e.g., "extract names", "get all emails", "in table form", "find contacts"), return a JSON ARRAY of objects where each object represents one item.
-   - If the user asks for a **Summary/Explanation** (e.g., "summarize", "what is the problem", "explain"), return a JSON ARRAY with a **SINGLE OBJECT**.
-     - **CRITICAL:** Combine ALL relevant sections (Problem, Solution, Context, Bonus Points) into a **SINGLE STRING** value within that object.
-     - Use newlines (\\n) to separate sections within the string.
-     - Do NOT return multiple objects for different parts of the summary.
-4. Each object should have consistent keys based on the data found.
-5. Clean the data (remove extra whitespace).
-6. **Return at MOST 50 results.**
-7. Return ONLY the JSON array. No markdown, no explanation.
-
-Example Output (List):
-[{"Feature": "Save"}, {"Feature": "Export"}]
-
-Example Output (Summary):
-[{"Problem Statement": "The problem is X.\\n\\nDesired Solution:\\nThe solution should be Y.\\n\\nBonus Points:\\n- Point A\\n- Point B"}]`;
-
-        try {
-            const response = await this.callGoogleAI(prompt, {
-                temperature: 0.1,
-                maxTokens: 4096 // Ensure we have enough room for large extractions
-            });
-
-            console.log('Raw AI Extraction Response:', response);
-
-            const jsonString = this.extractJSON(response);
-            if (!jsonString) {
-                console.error('Could not find JSON in AI response:', response);
-                throw new Error('Failed to find structure in AI response.');
-            }
-
-            try {
-                const data = JSON.parse(jsonString);
-
-                if (!Array.isArray(data)) {
-                    return [data];
-                }
-
-                // Normalize: If array contains strings, convert to objects
-                if (data.length > 0 && typeof data[0] === 'string') {
-                    return data.map(item => ({ "Extracted Result": item }));
-                }
-
-                return data;
-            } catch (parseError) {
-                console.error('JSON Parse Error:', parseError);
-                // Log snippet of failing JSON for debugging
-                console.error('Failing JSON snippet:', jsonString.substring(0, 200) + '...');
-                throw new Error('Failed to parse AI response.');
-            }
-        } catch (error) {
-            console.error('AI Extraction Error:', error);
-            throw error;
-        }
+        return 'AI Error: ' + error.message.replace('API_ERROR: ', '');
     }
 
-    /**
-     * Robustly extracts JSON block from text
-     * @param {string} text - Text containing JSON
-     * @returns {string|null} - Extracted JSON string or null
-     */
+    // Compatibility shim for extraction in popup/sidepanel
     extractJSON(text) {
-        if (!text) return null;
-
-        let cleaned = text.trim();
-
-        // 1. Precise Match: Look for markdown blocks
-        const mdMatch = cleaned.match(/```json\s*([\s\S]*?)\s*```/) || cleaned.match(/```\s*([\s\S]*?)\s*```/);
-        if (mdMatch) {
-            return mdMatch[1].trim();
-        }
-
-        // 2. Greedy Search: Look for the first/last bracket/brace
-        const firstBracket = cleaned.indexOf('[');
-        const firstBrace = cleaned.indexOf('{');
-
-        let start = -1;
-        let endChar = '';
-
-        if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
-            start = firstBracket;
-            endChar = ']';
-        } else if (firstBrace !== -1) {
-            start = firstBrace;
-            endChar = '}';
-        }
-
-        if (start !== -1) {
-            const lastEndChar = cleaned.lastIndexOf(endChar);
-            if (lastEndChar > start) {
-                return cleaned.substring(start, lastEndChar + 1);
-            }
-        }
-
-        return cleaned;
+        return this.router.providers.gemini.extractJSON(text);
     }
 
     /**
-     * Verifies extracted data against source text (Step 2: Verification)
-     * @param {string} text - The original source text
-     * @param {Array<Object>} data - The extracted data to verify
-     * @param {string} query - The original user query
-     * @returns {Promise<Array<Object>>} Verified and corrected data
+     * Get API key for a specific provider
      */
-    async verifyExtractedData(text, data, query) {
-        if (!data || data.length === 0) return data;
-
-        // Limit text for verification context if needed, but try to keep as much as possible
-        // We send the extracted JSON and ask AI to check if it's supported by the text
-        const prompt = `You are a strict Data Verification Auditor.
-        
-User Query: "${query}"
-
-Original Source Text:
-"${text}"
-
-Extracted Data (to verify):
-${JSON.stringify(data, null, 2)}
-
-Instructions:
-1. Verify that EACH item in the "Extracted Data" is actually present in the "Original Source Text".
-2. **REMOVE** any items that are hallucinations or not supported by the text.
-3. **CORRECT** any values that are slightly wrong.
-4. **KEEP** items that are correct.
-5. Ensure the data matches the User Query intent.
-6. **FORMATTING RULE:**
-   - If the input is a **List**, return a verified List.
-   - If the input is a **Summary/Text Block** (single object with long text), verify the facts within the text but **KEEP IT AS A TEXT BLOCK**. Do not split it into a list unless explicitly asked.
-7. Return the CLEANED, VERIFIED JSON array.
-8. Return ONLY the JSON array. No markdown, no explanation.
-
-Example Output (List):
-[{"Feature": "Right-click save"}, {"Feature": "Auto-capture"}]
-
-Example Output (Summary):
-[{"Summary": "The verified problem is that users..."}]`;
-
-        try {
-            const response = await this.callGoogleAI(prompt, { temperature: 0.0 }); // Zero temp for strict verification
-            console.log('Raw AI Verification Response:', response);
-
-            let jsonString = response.trim();
-            if (jsonString.startsWith('```json')) {
-                jsonString = jsonString.replace(/^```json\n/, '').replace(/\n```$/, '');
-            } else if (jsonString.startsWith('```')) {
-                jsonString = jsonString.replace(/^```\n/, '').replace(/\n```$/, '');
-            }
-
-            let verifiedData = JSON.parse(jsonString);
-
-            if (!Array.isArray(verifiedData)) {
-                verifiedData = [verifiedData];
-            }
-
-            // Normalize: If array contains strings, convert to objects
-            if (verifiedData.length > 0 && typeof verifiedData[0] === 'string') {
-                return verifiedData.map(item => ({ "Extracted Result": item }));
-            }
-
-            return verifiedData;
-        } catch (error) {
-            console.warn('Verification failed, returning original data:', error);
-            return data; // Fallback to original data if verification fails
-        }
+    async getProviderApiKey(providerId) {
+        const id = providerId === 'claude' ? 'anthropic' : providerId;
+        if (!this.router.providers[id]) return null;
+        return await this.router.providers[id].getApiKey();
     }
 
     /**
-     * Orchestrates the Extraction -> Verification pipeline
-     * @param {string} text - Page text
-     * @param {string} query - User query
-     * @returns {Promise<Array<Object>>} Final verified data
+     * Set API key for a specific provider
      */
-    async transformCollection(items, instruction) {
-        const itemContext = items.map((item, index) => {
-            const data = item.data || {};
-            const source = item.source || {};
-            return `Item ${index + 1}:
-Title: ${item.title || source.title || 'Untitled'}
-URL: ${source.url || 'N/A'}
-Data: ${JSON.stringify(data)}
----`;
-        }).join('\n\n');
+    async setProviderApiKey(providerId, apiKey) {
+        const id = providerId === 'claude' ? 'anthropic' : providerId;
+        const provider = this.router.providers[id];
+        if (!provider) throw new Error(`Unknown provider: ${id}`);
 
-        const prompt = `You are an expert data analyst and editor.
-        
-User Instruction: "${instruction}"
+        console.log(`[SmartCollector] Saving API key for ${id}...`);
+        return new Promise((resolve) => {
+            chrome.storage.sync.set({ [provider.apiKeyStorageKey]: apiKey }, resolve);
+        });
+    }
 
-Background Context:
-The user has collected several items in a "Smart Collector" extension. You need to process these items based on their instruction.
+    /**
+     * Set the active provider
+     */
+    async setActiveProvider(providerId) {
+        const id = providerId === 'claude' ? 'anthropic' : providerId;
+        if (!this.router.providers[id]) throw new Error(`Unknown provider: ${id}`);
 
-Collected Items:
-${itemContext}
-
-Instructions:
-1. Carefully follow the User Instruction to transform, summarize, or reformat the data.
-2. If the user asks for a table, use Markdown table formatting.
-3. If the user asks for a summary, be professional and structured.
-4. If the user asks to "clean" or "reformat" JSON, provide the improved JSON.
-5. Your output will be rendered directly on a "Paper" styled notebook page. Use clean Markdown.
-6. **Focus ONLY on the content.** Do not add conversational filler unless necessary for the transformation results.
-
-Your Transformation Result:`;
-
-        try {
-            return await this.callGoogleAI(prompt, {
-                temperature: 0.2, // Slightly higher for creative transformations
-                maxTokens: 4096
-            });
-        } catch (error) {
-            console.error('AI Transformation Error:', error);
-            throw error;
-        }
+        return new Promise((resolve) => {
+            chrome.storage.sync.set({ [AI_PROVIDER_KEY]: id }, resolve);
+        });
     }
 }
 

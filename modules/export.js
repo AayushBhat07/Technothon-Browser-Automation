@@ -375,5 +375,308 @@ export const ExportManager = {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    },
+
+    /**
+     * Exports collection to PDF by opening print dialog
+     * @param {Object} collection - The collection to export
+     */
+    exportToPDF(collection) {
+        if (!collection || !collection.items || collection.items.length === 0) {
+            alert('Collection is empty or invalid.');
+            return;
+        }
+
+        const allFields = this.detectAllFields(collection.items);
+        const htmlContent = this.buildPrintableHTML(collection, allFields);
+
+        // Open in new window and trigger print
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Please allow popups to export PDF');
+            return;
+        }
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+
+        // Wait for content to load then print
+        printWindow.onload = () => {
+            setTimeout(() => {
+                printWindow.print();
+            }, 500);
+        };
+
+        // Fallback if onload doesn't fire
+        setTimeout(() => {
+            printWindow.print();
+        }, 1000);
+    },
+
+    /**
+     * Builds HTML optimized for PDF printing
+     */
+    buildPrintableHTML(collection, fields) {
+        const headers = fields.map(f => f.name);
+        const date = new Date().toLocaleDateString();
+
+        // Generate rows
+        const rows = collection.items.map((item, index) => {
+            const cells = fields.map(field => {
+                let value = '';
+                if (field.source === 'data') {
+                    value = item.data?.[field.key] || '';
+                } else if (field.source === 'enriched') {
+                    value = item.enriched?.[field.key] || '';
+                } else if (field.source === 'meta') {
+                    if (field.fieldKey === 'type') value = item.type || '';
+                    else if (field.fieldKey === 'source.title') value = item.source?.title || '';
+                    else if (field.fieldKey === 'source.url') value = item.source?.url || '';
+                    else if (field.fieldKey === 'timestamp') value = this.formatDate(item.timestamp);
+                    else if (field.fieldKey === 'ai_extracted') value = item.ai_extracted ? 'Yes' : '';
+                }
+
+                // Handle arrays/lists
+                if (Array.isArray(value)) {
+                    value = `<ul style="margin:0; padding-left:16px;">${value.map(v => `<li>${v}</li>`).join('')}</ul>`;
+                } else if (typeof value === 'object' && value !== null) {
+                    value = `<pre style="margin:0; font-size:9px; white-space:pre-wrap;">${JSON.stringify(value, null, 2)}</pre>`;
+                } else if (typeof value === 'string' && value.includes('\n')) {
+                    value = value.replace(/\n/g, '<br>');
+                }
+
+                return `<td>${value}</td>`;
+            }).join('');
+            return `<tr>${cells}</tr>`;
+        }).join('');
+
+        return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${collection.name} - Export</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 15mm;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #1e293b;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #2563eb;
+        }
+
+        .header h1 {
+            margin: 0 0 8px 0;
+            font-size: 20pt;
+            color: #2563eb;
+        }
+
+        .header .meta {
+            color: #64748b;
+            font-size: 10pt;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
+        }
+
+        th {
+            background: #f1f5f9;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 9pt;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 8px 10px;
+            border: 1px solid #e2e8f0;
+            vertical-align: top;
+            font-size: 9pt;
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
+        tr:nth-child(even) {
+            background: #f8fafc;
+        }
+
+        ul {
+            margin: 4px 0;
+            padding-left: 16px;
+        }
+
+        li {
+            margin-bottom: 2px;
+        }
+
+        pre {
+            background: #f1f5f9;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 8pt;
+            overflow-x: auto;
+        }
+
+        .footer {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 8pt;
+            color: #94a3b8;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 10px;
+        }
+
+        @media print {
+            body {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>${collection.name}</h1>
+        <div class="meta">${collection.items.length} items • Exported on ${date} • Smart Collector</div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+            ${rows}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        Generated by Smart Web Collector
+    </div>
+
+    <script>
+        // Auto-trigger print dialog when loaded
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+            }, 300);
+        };
+    </script>
+</body>
+</html>`;
+    },
+
+    /**
+     * Exports collection to plain text format
+     * @param {Object} collection - The collection to export
+     */
+    exportToTXT(collection) {
+        if (!collection || !collection.items || collection.items.length === 0) {
+            alert('Collection is empty or invalid.');
+            return;
+        }
+
+        const allFields = this.detectAllFields(collection.items);
+        const txtContent = this.buildTXT(collection, allFields);
+        this.downloadTXT(txtContent, collection.name);
+    },
+
+    /**
+     * Builds plain text content from collection data
+     */
+    buildTXT(collection, fields) {
+        const date = new Date().toLocaleDateString();
+        const separator = '='.repeat(60);
+        const thinSep = '-'.repeat(60);
+
+        let lines = [];
+        lines.push(separator);
+        lines.push(`  ${collection.name}`);
+        lines.push(`  ${collection.items.length} items • Exported on ${date}`);
+        lines.push(separator);
+        lines.push('');
+
+        collection.items.forEach((item, idx) => {
+            lines.push(`--- Item ${idx + 1} ${thinSep.substring(0, 40)}`);
+            fields.forEach(field => {
+                let value = '';
+                if (field.source === 'data') {
+                    value = item.data?.[field.key] || '';
+                } else if (field.source === 'enriched') {
+                    value = item.enriched?.[field.key] || '';
+                } else if (field.source === 'meta') {
+                    if (field.fieldKey === 'type') value = item.type || '';
+                    else if (field.fieldKey === 'source.title') value = item.source?.title || '';
+                    else if (field.fieldKey === 'source.url') value = item.source?.url || '';
+                    else if (field.fieldKey === 'timestamp') value = this.formatDate(item.timestamp);
+                    else if (field.fieldKey === 'ai_extracted') value = item.ai_extracted ? 'Yes' : 'No';
+                }
+
+                if (Array.isArray(value)) {
+                    value = value.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join(', ');
+                } else if (typeof value === 'object' && value !== null) {
+                    value = JSON.stringify(value);
+                } else {
+                    value = String(value || '');
+                }
+
+                if (value.trim()) {
+                    lines.push(`  ${field.name}: ${value}`);
+                }
+            });
+            lines.push('');
+        });
+
+        lines.push(separator);
+        lines.push('  Generated by Smart Web Collector');
+        lines.push(separator);
+
+        return lines.join('\n');
+    },
+
+    /**
+     * Triggers TXT download
+     */
+    downloadTXT(txtContent, collectionName) {
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `${collectionName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_export.txt`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 };

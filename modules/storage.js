@@ -4,8 +4,10 @@
  */
 
 const DB_NAME = 'SmartWebCollectorDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_COLLECTIONS = 'collections';
+const STORE_VERSIONS = 'versions';
+const STORE_AUDITS = 'audits';
 
 class StorageManager {
     constructor() {
@@ -34,9 +36,25 @@ class StorageManager {
 
             request.onupgradeneeded = (event) => {
                 const db = event.target.result;
+
+                // Collections Store (Existing)
                 if (!db.objectStoreNames.contains(STORE_COLLECTIONS)) {
                     const store = db.createObjectStore(STORE_COLLECTIONS, { keyPath: 'id' });
                     store.createIndex('created', 'created', { unique: false });
+                }
+
+                // Versions Store (New in v2)
+                if (!db.objectStoreNames.contains(STORE_VERSIONS)) {
+                    const store = db.createObjectStore(STORE_VERSIONS, { keyPath: 'versionId' });
+                    store.createIndex('timestamp', 'timestamp', { unique: false });
+                    store.createIndex('parentVersionId', 'parentVersionId', { unique: false });
+                }
+
+                // Audits Store (New in v2)
+                if (!db.objectStoreNames.contains(STORE_AUDITS)) {
+                    const store = db.createObjectStore(STORE_AUDITS, { keyPath: 'id' });
+                    store.createIndex('timestamp', 'timestamp', { unique: false });
+                    store.createIndex('versionId', 'versionId', { unique: false });
                 }
             };
         });
@@ -166,6 +184,167 @@ class StorageManager {
         // Save both collections
         await this.saveCollection(fromCollection);
         await this.saveCollection(toCollection);
+    }
+
+    // ==========================================
+    // VERSIONING (GIT-STYLE)
+    // ==========================================
+
+    /**
+     * Creates an immutable snapshot of the current state.
+     * @param {string} commitMessage - Human-readable message for this version.
+     * @param {string|null} parentVersionId - The ID of the parent version (null if root).
+     * @returns {Promise<string>} - The new versionId.
+     */
+    async createSnapshot(commitMessage, parentVersionId = null) {
+        await this.open();
+        const collections = await this.getCollections();
+
+        const versionId = crypto.randomUUID();
+        const timestamp = new Date().toISOString();
+
+        const versionRecord = {
+            versionId,
+            parentVersionId,
+            timestamp,
+            commitMessage,
+            snapshotData: collections // Store full state
+        };
+
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_VERSIONS], 'readwrite');
+            const store = transaction.objectStore(STORE_VERSIONS);
+            const request = store.add(versionRecord);
+
+            request.onsuccess = () => resolve(versionId);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    /**
+     * Restores a specific version state.
+     * CRITICAL: This does NOT overwrite history. It creates a NEW version (child of the restored one).
+     * @param {string} versionId - The ID of the version to restore.
+     * @returns {Promise<string>} - The NEW versionId created by this restore operation.
+     */
+    async restoreVersion(versionId) {
+        await this.open();
+
+        // 1. Fetch the target version
+        const targetVersion = await new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_VERSIONS], 'readonly');
+            const store = transaction.objectStore(STORE_VERSIONS);
+            const request = store.get(versionId);
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+
+        if (!targetVersion) {
+            throw new Error(`Version ${versionId} not found.`);
+        }
+
+        // 2. Overwrite current state with snapshot data
+        const collections = targetVersion.snapshotData;
+
+        // Use a transaction to clear and repopulate collections
+        const transaction = this.db.transaction([STORE_COLLECTIONS], 'readwrite');
+        const store = transaction.objectStore(STORE_COLLECTIONS);
+
+        await new Promise((resolve, reject) => {
+            // clear() is fastest for full restore
+            const clearReq = store.clear();
+
+            clearReq.onsuccess = () => {
+                // Bulk add back
+                let pending = collections.length;
+                if (pending === 0) resolve();
+
+                collections.forEach(col => {
+                    const addReq = store.put(col);
+                    addReq.onsuccess = () => {
+                        pending--;
+                        if (pending === 0) resolve();
+                    };
+                    addReq.onerror = (e) => reject(e.target.error);
+                });
+            };
+            clearReq.onerror = (e) => reject(e.target.error);
+        });
+
+        // 3. Create a NEW version commit for this restore (Git checkout -b behavior)
+        const restoreMessage = `Restored to version: ${targetVersion.commitMessage} (${versionId.substring(0, 8)})`;
+        // The parent of this new state is the version we just restored FROM.
+        // This creates a branch off that historical point.
+        const newVersionId = await this.createSnapshot(restoreMessage, versionId);
+
+        return newVersionId;
+    }
+
+    /**
+     * Retrieves history of versions.
+     * @returns {Promise<Array>}
+     */
+    async getVersions() {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_VERSIONS], 'readonly');
+            const store = transaction.objectStore(STORE_VERSIONS);
+            const request = store.getAll(); // Grab all for DAG construction
+
+            request.onsuccess = () => {
+                // Sort by timestamp descending by default
+                const results = request.result.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                resolve(results);
+            };
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    // ==========================================
+    // AI AUDIT LOGGING
+    // ==========================================
+
+    /**
+     * Saves an immutable audit record of an AI operation.
+     * @param {Object} record - { sourceUrl, prompt, extractedFields, responseSummary, versionId }
+     * @returns {Promise<string>} - The ID of the audit record.
+     */
+    async saveAudit(record) {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_AUDITS], 'readwrite');
+            const store = transaction.objectStore(STORE_AUDITS);
+
+            const auditEntry = {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                ...record
+            };
+
+            const request = store.add(auditEntry);
+
+            request.onsuccess = () => resolve(auditEntry.id);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    /**
+     * Retrieves audit logs.
+     * @returns {Promise<Array>}
+     */
+    async getAudits() {
+        await this.open();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([STORE_AUDITS], 'readonly');
+            const store = transaction.objectStore(STORE_AUDITS);
+            const request = store.getAll();
+
+            request.onsuccess = () => {
+                const results = request.result.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                resolve(results);
+            };
+            request.onerror = (e) => reject(e.target.error);
+        });
     }
 }
 

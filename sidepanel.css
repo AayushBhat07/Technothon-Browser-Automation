@@ -521,6 +521,9 @@ body {
     padding: 32px;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
     max-width: 90vw;
+    position: relative;
+    z-index: 1001;
+    pointer-events: auto;
 }
 
 .modal-actions {
@@ -556,6 +559,8 @@ body {
     margin-top: auto;
     padding-top: 24px;
     border-top: 1px solid var(--glass-border);
+    position: relative;
+    z-index: 50;
 }
 
 .settings-btn {
@@ -575,7 +580,7 @@ body {
 }
 
 .settings-btn:hover {
-    background: rgba(0, 0, 0, 0.03);
+    background: rgba(0, 0, 0, 0.05);
     border-color: var(--glass-border);
     color: var(--primary);
 }
@@ -587,4 +592,339 @@ body {
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* --- UI Restoration --- */
+
+/* New Folder Button */
+.new-folder-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: transparent;
+    border: 1px dashed var(--glass-border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 12px;
+}
+
+.new-folder-btn:hover {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Top Bar Layout */
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.search-box {
+    display: flex;
+    align-items: center;
+}
+
+.actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Stat Card Colors & Icons */
+.stat-card.purple {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(243, 232, 255, 0.5));
+    border-color: #E9D5FF;
+}
+
+.stat-card.blue {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(219, 234, 254, 0.5));
+    border-color: #BFDBFE;
+}
+
+.stat-card.green {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(209, 250, 229, 0.5));
+    border-color: #A7F3D0;
+}
+
+.stat-icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.stat-card.purple .stat-icon-circle {
+    background: #F3E8FF;
+    color: #9333EA;
+}
+
+.stat-card.blue .stat-icon-circle {
+    background: #DBEAFE;
+    color: #2563eb;
+}
+
+.stat-card.green .stat-icon-circle {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+/* Magic Bar Toggle Button */
+.magic-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.magic-icon {
+    font-size: 16px;
+}
+
+.toggle-status {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: auto;
+}
+
+.toggle-status.off {
+    background: #FEE2E2;
+    color: #991B1B;
+}
+
+.toggle-status.on {
+    background: #D1FAE5;
+    color: #059669;
+}
+
+/* THEME: MINIMALIST SAAS 🚀 */
+.theme-minimalist {
+    --primary: #2563eb;
+    --primary-glow: rgba(37, 99, 235, 0.2);
+    --bg-mesh: none;
+    --glass-bg: #ffffff;
+    --glass-border: #e5e7eb;
+    --sidebar-bg: #ffffff;
+    --card-bg: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --text-muted: #94a3b8;
+    --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.theme-minimalist .app-container {
+    background: #f3f4f6;
+}
+
+.theme-minimalist .sidebar {
+    background: #ffffff;
+    border-right: 1px solid #e5e7eb;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.theme-minimalist .content-area {
+    background: #f3f4f6;
+}
+
+.theme-minimalist .stat-card {
+    border-radius: 12px;
+    border: none;
+    padding: 20px;
+    color: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+
+.theme-minimalist .stat-card .stat-icon-circle {
+    background: rgba(255, 255, 255, 0.2) !important;
+    color: white !important;
+}
+
+.theme-minimalist .stat-card .stat-label {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.theme-minimalist .stat-card .stat-value {
+    color: white;
+}
+
+.theme-minimalist .table-container {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow-soft);
+    border: 1px solid #e5e7eb;
+}
+
+.theme-minimalist .table-header {
+    background: #ffffff;
+    border-bottom: 2px solid #f1f5f9;
+    padding: 12px 24px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.theme-minimalist .table-row {
+    border-radius: 0;
+    border: none;
+    border-bottom: 1px solid #f1f5f9;
+    box-shadow: none;
+    padding: 16px 24px;
+    background: #ffffff;
+}
+
+.theme-minimalist .table-row:last-child {
+    border-bottom: none;
+}
+
+.theme-minimalist .table-row:hover {
+    background: #f8fafc;
+    border-color: #f1f5f9;
+    transform: none;
+}
+
+.theme-minimalist .collection-item {
+    padding: 8px 12px;
+}
+
+.theme-minimalist .collection-item.active {
+    background: #e0e7ff;
+    color: #2563eb;
+    box-shadow: none;
+}
+
+.theme-minimalist .active .collection-count {
+    background: white;
+    color: #2563eb;
+}
+
+/* Modals for minimalist */
+.theme-minimalist .modal-content {
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Custom stats cards for Minimalist */
+.theme-minimalist .stat-card.blue {
+    background: #2563eb !important;
+    background-image: none !important;
+    /* Force remove gradient */
+}
+
+.theme-minimalist .stat-card.green {
+    background: #10b981 !important;
+    background-image: none !important;
+}
+
+.theme-minimalist .stat-card.purple {
+    background: #8b5cf6 !important;
+    background-image: none !important;
+}
+
+.theme-minimalist .stat-card.orange {
+    background: #f97316 !important;
+    background-image: none !important;
+}
+
+/* Make settings and history buttons full color in minimalist */
+.theme-minimalist .settings-btn {
+    background: #1e293b;
+    /* Solid dark color */
+    color: white;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    font-weight: 600;
+    margin-bottom: 8px;
+    /* Give them some breathing room */
+}
+
+.theme-minimalist .settings-btn:hover {
+    background: #0f172a;
+    color: white;
+    border: none;
+}
+
+
+/* Premium New Folder Button */
+.theme-minimalist .new-folder-btn {
+    border: none;
+    background: #2563eb;
+    /* Solid full color, no gradient */
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.theme-minimalist .new-folder-btn:hover {
+    transform: translateY(-2px);
+    background: #1d4ed8;
+    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35);
+    color: white;
+}
+
+.theme-minimalist .new-folder-btn svg {
+    color: white;
+}
+
+/* ====== Responsive Collection Grid ====== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Export dropdown styles */
+.export-dropdown {
+    animation: fadeIn 0.15s ease;
+}
+
+.col-actions {
+    position: relative;
+}
+
+/* Hide less important columns on smaller side panels */
+@media (max-width: 700px) {
+    .table-row {
+        grid-template-columns: 32px 1fr auto auto !important;
+        gap: 8px !important;
+    }
+
+    .col-progress,
+    .col-author,
+    .col-responses {
+        display: none !important;
+    }
+}
+
+@media (max-width: 500px) {
+    .table-row {
+        grid-template-columns: 1fr auto auto !important;
+        gap: 6px !important;
+    }
+
+    .col-checkbox,
+    .col-date {
+        display: none !important;
+    }
 }

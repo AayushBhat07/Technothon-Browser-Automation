@@ -37,7 +37,18 @@
                 <span class="item-title-crumb">Item Title</span>
             </div>
         </div>
-        <div class="header-right">
+        <div class="header-right" style="display: flex; align-items: center; gap: 8px;">
+            <div style="position: relative;" id="item-export-wrapper">
+                <button id="export-item-btn" class="secondary-btn"
+                    style="padding: 6px 12px; border: 1px solid var(--glass-border); background: var(--glass-bg); border-radius: 6px; display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--text-primary); font-size: 13px; font-weight: 500;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export
+                </button>
+            </div>
             <button id="save-btn" class="save-btn" style="display: none;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
@@ -46,6 +57,7 @@
                 </svg>
                 Save Changes
             </button>
+
             <div class="source-badge">
                 <img id="source-favicon" src="" alt="" style="display:none;">
                 <span id="source-domain">domain.com</span>
@@ -72,6 +84,7 @@
             <!-- Tab Switcher -->
             <div class="panel-tabs">
                 <button id="tab-ai" class="tab-btn active">AI Assistant</button>
+                <button id="tab-insights" class="tab-btn">Insights</button>
                 <button id="tab-history" class="tab-btn">History</button>
             </div>
 
@@ -109,6 +122,33 @@
                     </button>
                 </div>
 
+                <!-- Deep Enrich Intelligence Section -->
+                <div id="deep-enrich-section" class="deep-enrich-card" style="display:none;">
+                    <div class="deep-enrich-header">
+                        🔎 <span>Deep Intelligence Enrichment</span>
+                    </div>
+                    <div class="deep-enrich-desc">
+                        Enhance feed items by visiting source links, extracting full articles, and running AI
+                        intelligence pipelines.
+                    </div>
+                    <div class="deep-enrich-actions">
+                        <button id="btn-deep-enrich-all" class="tool-btn btn-primary" style="margin-bottom: 8px;">
+                            Deep Enrich All (Max 7)
+                        </button>
+                    </div>
+                    <div id="deep-enrich-progress" class="deep-enrich-progress" style="display:none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div class="progress-text">Processing: 0 / 7</div>
+                    </div>
+                    <div id="deep-enrich-results" class="deep-enrich-results" style="display:none;"></div>
+                    <button id="btn-save-enrichment" class="save-enrichment-btn tool-btn btn-primary"
+                        style="display:none; background: #10B981; margin-top: 12px;">
+                        Save Enriched Intelligence
+                    </button>
+                </div>
+
                 <!-- Chat Interface -->
                 <div class="chat-interface">
                     <div class="chat-messages" id="chat-messages">
@@ -136,6 +176,59 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- Insights Panel (Explainable Web Intelligence) -->
+            <div id="panel-insights" class="panel-content">
+                <div class="panel-header">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <span>Explainable Intelligence</span>
+                </div>
+                <!-- Content injected by JS -->
+                <div id="insights-content" class="insights-container">
+                    <div class="empty-state">No intelligence data available for this item.</div>
+                </div>
+
+                <!-- Feed Intelligence Profile (conditionally populated by JS) -->
+                <div id="feed-intelligence-profile"
+                    style="display:none; margin-top: 12px; padding: 12px; background: linear-gradient(135deg, #dbeafe, #ede9fe); border-radius: 10px; font-size: 13px; color: #1e293b;">
+                    <div
+                        style="display:flex; align-items:center; gap:6px; font-weight:700; margin-bottom:8px; color:#4338ca;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M4 11a9 9 0 0 1 9 9" />
+                            <path d="M4 4a16 16 0 0 1 16 16" />
+                            <circle cx="5" cy="19" r="1" />
+                        </svg>
+                        Feed Intelligence Profile
+                    </div>
+                    <table style="width:100%; border-collapse:collapse;">
+                        <tr>
+                            <td style="padding:4px 0; font-weight:600; color:#64748b; width:120px;">Topic</td>
+                            <td id="feed-topic" style="padding:4px 0;">—</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:4px 0; font-weight:600; color:#64748b;">Feed Sources</td>
+                            <td id="feed-sources" style="padding:4px 0;">—</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:4px 0; font-weight:600; color:#64748b;">Retrieved At</td>
+                            <td id="feed-timestamp" style="padding:4px 0;">—</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:4px 0; font-weight:600; color:#64748b;">Entry Count</td>
+                            <td id="feed-entry-count" style="padding:4px 0;">—</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:4px 0; font-weight:600; color:#64748b;">Verification</td>
+                            <td id="feed-verification" style="padding:4px 0;">—</td>
+                        </tr>
+                    </table>
                 </div>
             </div>
 
