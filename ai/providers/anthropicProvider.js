@@ -69,7 +69,7 @@ export class AnthropicProvider extends BaseAIProvider {
                     // If model not found, try the next one
                     if (response.status === 404) {
                         const errMessage = errorData.error?.message || response.statusText;
-                        console.warn(`[AnthropicProvider] Model ${modelId} not found (${errMessage}), trying fallback...`);
+                        console.info(`[AnthropicProvider] Model ${modelId} not found (${errMessage}), falling back to next available model...`);
                         lastError = new Error(`MODEL_NOT_FOUND: ${modelId} - ${errMessage}`);
                         continue;
                     }
@@ -81,6 +81,13 @@ export class AnthropicProvider extends BaseAIProvider {
                 const rawText = data.content?.[0]?.text;
 
                 if (!rawText) throw new Error('INVALID_RESPONSE');
+
+                // Cache the successful model to the front of the array to prevent repeated fallback delays
+                // on subsequent requests in the same background worker session.
+                if (this.models[0] !== modelId) {
+                    this.models = [modelId, ...this.models.filter(m => m !== modelId)];
+                    console.log(`[AnthropicProvider] Promoted "${modelId}" to the default model to bypass future fallback delays.`);
+                }
 
                 return {
                     rawText,
