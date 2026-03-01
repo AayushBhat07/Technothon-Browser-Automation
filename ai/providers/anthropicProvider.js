@@ -4,9 +4,11 @@ export class AnthropicProvider extends BaseAIProvider {
     constructor() {
         super('Anthropic', 'anthropic_api_key');
         this.models = [
+            'claude-3-7-sonnet-latest',
             'claude-3-7-sonnet-20250219',
+            'claude-3-5-sonnet-latest',
             'claude-3-5-sonnet-20241022',
-            'claude-3-5-sonnet-20240620',
+            'claude-3-5-haiku-latest',
             'claude-3-5-haiku-20241022',
             'claude-3-haiku-20240307'
         ];
@@ -66,7 +68,9 @@ export class AnthropicProvider extends BaseAIProvider {
 
                     // If model not found, try the next one
                     if (response.status === 404) {
-                        console.warn(`[AnthropicProvider] Model ${modelId} not found, trying fallback...`);
+                        const errMessage = errorData.error?.message || response.statusText;
+                        console.warn(`[AnthropicProvider] Model ${modelId} not found (${errMessage}), trying fallback...`);
+                        lastError = new Error(`MODEL_NOT_FOUND: ${modelId} - ${errMessage}`);
                         continue;
                     }
 
