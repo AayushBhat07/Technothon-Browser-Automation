@@ -1,92 +1,176 @@
-# Smart Web Collector
+# Zappo: Smart Web Collector
 
-A Chrome Extension for intelligent web data collection, enrichment, and export.
+A risk-controlled browser automation layer and intelligence transformation engine. Zappo bridges the gap between raw web data and actionable structured intelligence through a secure, governable, and vendor-independent architecture.
 
-## Installation
+---
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable **Developer mode** (toggle in top-right corner)
-3. Click **Load unpacked**
-4. Select the `smart-web-collector` folder
+## Core Value Proposition
 
-## Usage
+Zappo provides enterprise-ready web intelligence automation directly within the browser ecosystem. It replaces brittle scraping scripts and uncontrolled AI workflows with a structured, verifiable, and auditable pipeline.
 
-### Collecting Data
-1. Visit any webpage
-2. Select text you want to save
-3. Right-click → **Save to Smart Collector**
-4. Data is automatically saved to the "Unsorted" collection
+- **Risk-Controlled AI Automation:** Executes data extraction with explicit intent, avoiding runaway LLM loops or unchecked web crawling.
+- **Structured Intelligence Transformation:** Converts unstructured web data (pages, RSS feeds, deep links) into reliable, schema-compliant JSON formats.
+- **Built-in Audit & Traceability:** Every extraction generates a permanent `auditId` and immutable version snapshot, ensuring clear lineage for all data decisions.
+- **Vendor-Independent AI Core:** An abstracted routing layer allows seamless switching between major AI providers (Anthropic, OpenAI, Google) to prevent vendor lock-in and optimize for specific models.
+- **Local-First Architecture:** Eliminates third-party server risks by managing state, API keys, and collected intelligence securely within the browser's local sandbox (IndexedDB and secure sync).
+- **Reduced Operational Risk:** Replaces manual research time with structured, parallelized collection while respecting domain bot protections and rate limits.
+- **Faster Decision Cycles:** Accelerates time-to-insight through automated Deep Enrich workflows and real-time Explainable Intelligence panels.
 
-### Managing Collections
-1. Click the extension icon in Chrome toolbar OR open the Side Panel
-2. View all your collections in the sidebar
-3. Click **+** to create a new collection
-4. Click on a collection to view its items
+---
 
-### Enriching Data
-1. Select a collection with items
-2. Click **Enrich** button
-3. Wait for the enrichment process to complete
-4. Enriched items will show a ✨ badge
+## Feature Overview
 
-### Generating Templates
-1. Select a collection with items
-2. Click **Templates** button
-3. Write your template using placeholders like `{name}`, `{company}`, `{source_url}`
-4. Preview updates in real-time
-5. Click **Copy All** to generate documents for all items
+- **Magic Bar Interface**
+  - *Function:* An intent-driven command palette overlay (accessible via `Cmd+Z`) for executing natural language extraction requests on any web page.
+  - *Value:* Removes the need for complex, predefined scrapers by allowing users to define extraction schemas dynamically.
 
-### Exporting Data
-1. Select a collection
-2. Click **Export** button
-3. Map your data fields to standard columns (auto-mapping attempts to help)
-4. Click **Export** to download CSV
+- **RSS Feed Ingestion Strategy**
+  - *Function:* Aggregates and normalizes 10+ items from multiple trusted feed sources based on user intent (e.g., "Extract latest AI funding news").
+  - *Value:* Dramatically accelerates market research and situational awareness by providing pre-structured, multi-source intelligence briefs.
 
-- ✅ Web data collection via context menu
-- ✅ Collection management (create, view, delete)
-- ✅ AI Magic Bar for natural language extraction
-- ✅ Data enrichment
-- ✅ Data validation (email, phone, etc.)
-- ✅ Smart column mapping
-- ✅ Template-based document generation
-- ✅ CSV export
+- **Deep Enrich Intelligence Pipeline**
+  - *Function:* Paralleled expansion of linked top-level entities (max 7 concurrent requests). Visits underlying URLs, extracts full text, and generates consolidated executive briefs.
+  - *Value:* Multiplies research depth automatically without requiring users to manually open dozens of tabs, compiling vast amounts of data into strategic signals.
 
-## Troubleshooting
+- **Self-Verifying AI Architecture**
+  - *Function:* A rigorous two-pass pipeline. Pass 1 extracts data; Pass 2 acts as a deterministic auditor comparing the output against the exact source text, generating confidence scores.
+  - *Value:* Eliminates AI hallucination risks by flagging unsupported data before it enters the workflow.
 
-**Context menu not showing?**
-- Make sure you've selected text before right-clicking
-- Reload the extension at `chrome://extensions/`
-- Check the service worker console for errors
+- **Explainable Web Intelligence Panel**
+  - *Function:* A dedicated UI layer that exposes the underlying extraction logic, displaying confidence scores, extraction reasoning, and exact source text snippets for every data point.
+  - *Value:* Builds trust in automated outputs by keeping the "black box" of AI completely transparent to the user.
 
-**Side panel not opening?**
-- Look for the Side Panel icon (≡) in Chrome's top-right area
-- Alternatively, click the extension icon → "View All Collections"
+- **Immutable Version Snapshots**
+  - *Function:* Every modification, extraction, or deep enrichment creates a timestamped, irreversible snapshot of the data state.
+  - *Value:* Provides robust governance and rollback capabilities, ensuring data integrity over the lifecycle of a document.
 
-## Development
+- **AI Assistant Tab**
+  - *Function:* A conversational interface deeply integrated into the Item View, allowing users to interact directly with the extracted intelligence (e.g., summarize, rewrite, analyze).
+  - *Value:* Enhances workflow efficiency by allowing immediate, context-aware AI operations on governed data without leaving the application.
 
-### Project Structure
+- **Provider-Agnostic AI Router**
+  - *Function:* Interfaces with Google Gemini, Anthropic Claude, and OpenAI via a unified API abstraction layer.
+  - *Value:* Ensures operational continuity and the capability to leverage the best-in-class model for specific extraction tasks without rewriting core logic.
+
+- **Controlled Parallel Processing**
+  - *Function:* Manages simultaneous data fetching operations (like fetching feeds or Deep Enrich) within strict concurrency limits (e.g., max 3 active connections).
+  - *Value:* Prevents browser lockups, respects remote server limits, and ensures network stability during mass ingestion events.
+
+- **Graceful Bot Handling**
+  - *Function:* Automatically detects and skips domains guarded by Cloudflare challenges, CAPTCHAs, or aggressive rate limiting without crashing the primary thread.
+  - *Value:* Ensures robust pipeline stability and maintains operational stealth, preventing IP bans and workflow disruptions.
+  - *Improvement over Typical Macros:* Standard macros fail catastrophically on bot-walls. Zappo recognizes them, logs the blockage, and gracefully continues processing remaining items.
+
+---
+
+## Architecture Flow
+
+The system operates on an explicit, linear pipeline ensuring maximum transparency and control at every stage.
+
+```text
+User Intent (Magic Bar / Dashboard)
+       ↓
+Source Data Retrieval (DOM / RSS Feeds / Deep Links)
+       ↓
+Standardization & Normalization
+       ↓
+AI Extraction Pass (Schema Enforcement)
+       ↓
+AI Verification Pass (Hallucination Check)
+       ↓
+Immutable Version Snapshot Creation
+       ↓
+Storage (Local IndexedDB Repository)
+       ↓
+Explainable Intelligence Presentation (UI)
+       ↓
+Optional Deep Enrich Expansion
 ```
-smart-web-collector/
-├── public/                # Static assets & Manifest
-│   ├── manifest.json      # Extension configuration
-│   └── icons/             # Extension icons
-├── src/                   # Source code
-│   ├── background.js      # Service worker
-│   ├── content.js         # Content script
-│   ├── content-magic-bar.js # Magic Bar UI
-│   ├── sidepanel.js       # Side panel logic
-│   └── modules/           # Core library modules
-│       ├── storage.js     # IndexedDB wrapper
-│       ├── ai.js          # Gemini AI integration
-│       └── export.js      # Export utilities
-└── lib/                   # External libraries
-```
 
-### Tech Stack
-- Vanilla JavaScript (ES6 modules)
-- IndexedDB for local storage
-- Chrome Extension Manifest V3
+**Key Architectural Tenets:**
+- **Separation of Concerns:** Intent parsing, data retrieval, AI routing, and persistence are strictly decoupled.
+- **Provider Abstraction:** The core pipeline never calls an API directly; all requests flow through the `AIRouter` interface.
+- **Controlled Enrichment:** Background fetching mechanisms are intentionally bottlenecked (e.g. max 7 links) to ensure responsible crawling and to shield the user from chaotic data dumps.
+- **Governance Layer:** The `storage.js` module acts as a gatekeeper, enforcing append-only history logs and preventing silent data overwrites.
 
-## License
+---
 
-MIT
+## Setup Instructions
+
+### Requirements
+- Node.js (Not strictly required for running the extension, but useful if future build scripts are added)
+- Google Chrome browser (Manifest V3 compatible)
+- Valid API key from at least one supported provider:
+  - Anthropic (Claude 3.5 Sonnet / 3.7 Sonnet)
+  - OpenAI (GPT-4o)
+  - Google (Gemini 1.5 Pro)
+
+### Installation
+1. Clone this repository to your local machine:
+   ```bash
+   git clone https://github.com/your-org/smart-web-collector.git
+   ```
+2. Open Google Chrome and navigate to `chrome://extensions/`.
+3. Enable **Developer Mode** toggle in the top right corner.
+4. Click **Load unpacked** and select the cloned repository directory (`smart-web-collector/`).
+
+### API Configuration
+API keys are intentionally never hardcoded and must be provided locally by the user post-installation.
+
+1. Click the Zappo extension icon in the Chrome toolbar.
+2. Navigate to the **Settings** panel via the gear icon.
+3. Select your preferred AI Provider from the dropdown menu.
+4. Securely input your API key. (Keys are stored using Chrome's encrypted `chrome.storage.sync` API natively and are never exposed to the DOM).
+5. Click **Save Preferences**. The extension is now active and ready for intent execution.
+
+---
+
+## Deep Enrich Infrastructure
+
+The Deep Enrich module transforms surface-level feed lists into comprehensive intelligence briefs by actively visiting downstream links.
+
+- **Strict Bounding:** Enriches a maximum of exactly 7 high-value links per session to maintain high signal-to-noise ratios and prevent unbounded crawling.
+- **Safeguarded Parallelism:** Limits concurrent background fetches to a maximum of 3 active requests, preventing browser throttling and respecting remote server loads.
+- **Resilient Fetching:** Implements strict 5-second connection timeouts, dropping unresponsive nodes to keep the main thread agile.
+- **Graceful Skipping:** Actively parses return headers and DOM structures to skip over anti-bot services (Cloudflare, Distil, CAPTCHAs) without throwing fatal errors.
+- **Structured Executive Generation:** Feeds all successfully extracted text batches through a final AI consolidation prompt to produce a unified Strategic Brief and Metric Data Table.
+- **Governance First:** Enrichment results are presented to the user dynamically. Only upon explicit manual confirmation ("Save Enriched Intelligence") does the system commit the findings as an irreversible version snapshot.
+
+**Why this is safer than auto-scraping:**
+Traditional scrapers operate on unverified DOM selectors and unbounded recursion. Zappo requires explicit human authorization, respects domain limits natively, and forces AI validation on ingested content, fundamentally preventing junk-data contamination.
+
+---
+
+## Security & Governance
+
+Zappo is engineered for enterprise deployment where data lineage and security context are paramount.
+
+- **Local-First Architecture:** All collections, version histories, and AI intelligence configurations are stored exclusively in the browser's local IndexedDB container. No intermediate servers or telemetry endpoints broker your data.
+- **Explicit Execution:** The system performs zero background crawling autonomously. All AI extraction and deep enrichment tasks are initiated explicitly by a human operator.
+- **Verification Before Trust:** The mandatory two-pass LLM pipeline guarantees that extracted data is proven against the source DOM, assigning explicit confidence scores to AI assertions.
+- **Immutable Version History:** All data state changes commit an immutable snapshot. This ensures that no extraction is ever overwritten silently.
+- **Audit Traceability:** Every piece of extracted intelligence carries an internal `auditId` and a human-readable AI reasoning payload, making the origin of all data fundamentally verifiable.
+
+---
+
+## Limitations & Guardrails
+
+To strictly control risk and ensure high reliability, the system operates under the following native constraints:
+
+- **Public Content Restriction:** The background worker cannot authenticate into proprietary portals or bypass complex SSO login flows for automated collection runs. Use the foreground Magic Bar for gated content.
+- **Bot Protection Deference:** The Deep Enrich engine actively detects and retreats from domain-level defenses (Cloudflare challenges, CAPTCHA walls) rather than attempting to bypass them.
+- **AI Output Variance:** Output structure relies heavily on the quality and formatting of the target DOM or RSS feed.
+- **Source Dependency:** The reliability of intelligence aggregation is directly proportional to the credibility of the user-provided RSS feeds and target domains.
+
+---
+
+## Future Roadmap
+
+Zappo is building towards a comprehensive knowledge operating system for the browser:
+
+- **Team Workspace Sync:** Secure, end-to-end encrypted synchronization of intelligence collections across enterprise domains and teams.
+- **Enterprise Dashboard:** Centralized management of intelligence collections, featuring advanced comparative analytics and trend tracking.
+- **Role-Based Controls:** Institutional enforcement mechanisms capable of locking specific AI providers, token limits, or model usage for specific user groups.
+- **On-Device AI Support:** Integration with WebGPU and local-LLM architectures (like Llama.cpp WebAssembly) for complete zero-network data extraction capabilities.
+- **Automated Workflow Templates:** Pre-configured, reusable intent schemas for standardized operational research routines (e.g., Daily Competitor Pricing Scrapes).
+- **API Exposure Layer:** Enabling external downstream applications to securely query the local intelligence repository.

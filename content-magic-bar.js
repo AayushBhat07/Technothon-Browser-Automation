@@ -408,12 +408,59 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
                 .hidden {
                     display: none !important;
                 }
+                
+                /* Mode Toggle Switch */
+                .mode-toggle-wrapper {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    margin-bottom: 4px;
+                }
+                .mode-toggle {
+                    display: flex;
+                    background: #F3F4F6;
+                    border-radius: 8px;
+                    padding: 4px;
+                    position: relative;
+                }
+                .mode-btn {
+                    padding: 6px 16px;
+                    border-radius: 6px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #6B7280;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    z-index: 1;
+                }
+                .mode-btn.active {
+                    color: #6366F1;
+                }
+                .mode-indicator {
+                    position: absolute;
+                    top: 4px;
+                    bottom: 4px;
+                    left: 4px;
+                    width: calc(50% - 4px);
+                    background: white;
+                    border-radius: 6px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    transition: transform 0.2s ease;
+                    z-index: 0;
+                }
             `;
 
             // HTML Structure
             const wrapper = document.createElement('div');
             wrapper.className = 'magic-bar-container';
             wrapper.innerHTML = `
+                <div class="mode-toggle-wrapper">
+                    <div class="mode-toggle">
+                        <div class="mode-indicator"></div>
+                        <div class="mode-btn active" data-mode="page">Page Data</div>
+                        <div class="mode-btn" data-mode="rss">RSS Feeds</div>
+                    </div>
+                </div>
                 <div class="input-wrapper">
                     <div class="magic-icon">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -499,6 +546,27 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             this.collectionSelect = wrapper.querySelector('#collection-select');
             this.saveBtn = wrapper.querySelector('#save-btn');
             this.saveNewBtn = wrapper.querySelector('#save-new-btn');
+            this.modeToggleBtns = wrapper.querySelectorAll('.mode-btn');
+            this.modeIndicator = wrapper.querySelector('.mode-indicator');
+            this.currentMode = 'page';
+
+            this.modeToggleBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    this.modeToggleBtns.forEach(b => b.classList.remove('active'));
+                    const target = e.target;
+                    target.classList.add('active');
+                    this.currentMode = target.dataset.mode;
+
+                    // Move indicator
+                    if (this.currentMode === 'rss') {
+                        this.modeIndicator.style.transform = 'translateX(100%)';
+                        this.input.placeholder = "Ask AI for news (e.g., 'Get latest AI funding news')...";
+                    } else {
+                        this.modeIndicator.style.transform = 'translateX(0)';
+                        this.input.placeholder = "Ask AI to extract data (e.g., 'Get all job titles and salaries')...";
+                    }
+                });
+            });
 
             this.extractBtn.addEventListener('click', () => this.handleExtraction());
             this.input.addEventListener('keydown', (e) => {
@@ -569,13 +637,9 @@ console.log('[SmartCollector] Magic Bar v3.0 (SmartCollectorMagicBar class) - TE
             const query = this.input.value.trim();
             if (!query) return;
 
-            // --- Feed Intent Detection (client-side heuristic) ---
-            const feedActionWords = ['extract', 'get', 'fetch', 'find', 'show', 'list', 'pull', 'search for', 'look for', 'give me', 'what are', 'latest', 'recent', 'trending', 'top', 'breaking'];
-            const feedTopicWords = ['ai', 'artificial intelligence', 'machine learning', 'tech', 'technology', 'funding', 'startup', 'venture', 'science', 'business', 'news', 'headline', 'jobs', 'hiring', 'security', 'cyber', 'hacking'];
-            const lq = query.toLowerCase();
-            const isFeedQuery = feedActionWords.some(w => lq.includes(w)) && feedTopicWords.some(w => lq.includes(w));
+            const isFeedMode = this.currentMode === 'rss';
 
-            if (isFeedQuery) {
+            if (isFeedMode) {
                 // Feed queries don't require page text
                 this.setLoading(true, true);
                 this.clearResults();
